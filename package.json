@@ -17,6 +17,7 @@
     "desktop:build": "tauri build --no-bundle"
   },
   "dependencies": {
+    "@tauri-apps/api": "^2.12.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
   },
