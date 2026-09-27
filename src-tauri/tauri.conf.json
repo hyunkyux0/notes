@@ -1,0 +1,19 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Local Notes",
+  "version": "0.1.0",
+  "identifier": "io.github.hyunkyux0.notes",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://127.0.0.1:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [{ "title": "Local Notes", "width": 1100, "height": 760, "minWidth": 600, "minHeight": 480 }],
+    "security": {
+      "csp": "default-src 'self'; style-src 'self'; img-src 'self' data:; connect-src ipc: http://ipc.localhost"
+    }
+  },
+  "bundle": { "active": false, "icon": ["icons/256x256.png"] }
+}
