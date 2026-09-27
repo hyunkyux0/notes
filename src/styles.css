@@ -7,6 +7,7 @@
   --line: #dddfd6;
   --sidebar: #eeefe8;
   --selected: #d8e3d6;
+  --error: #aa3636;
 }
 * {
   box-sizing: border-box;
@@ -111,6 +112,42 @@ h1 {
   font-size: 14px;
   margin-top: 32px;
 }
+.vault-panel {
+  margin-top: 28px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.vault-panel h2 {
+  margin: 0;
+  font-size: 16px;
+}
+.vault-path {
+  overflow-wrap: anywhere;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.vault-hint {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+  margin-bottom: 0;
+}
+.primary-button {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 16px;
+  background: var(--selected);
+}
+button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+[role="alert"] {
+  color: var(--error);
+  font-size: 14px;
+  line-height: 1.5;
+}
 footer {
   padding: 24px 36px;
   color: var(--muted);
@@ -159,5 +196,6 @@ footer {
     --line: #414a42;
     --sidebar: #29312b;
     --selected: #3b4a3d;
+    --error: #ffaaa0;
   }
 }

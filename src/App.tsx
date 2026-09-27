@@ -1,10 +1,11 @@
 import { useState } from "react";
+import { VaultPanel } from "./vault/VaultPanel";
 
 const sections = {
   Notebook: {
     title: "A quiet place to think.",
     description: "Keep your ideas in Markdown files on your computer.",
-    next: "Folder selection and note editing are coming in the next milestone.",
+    next: "Note creation and editing are coming next.",
   },
   Reviews: {
     title: "Make room to remember.",
@@ -14,7 +15,7 @@ const sections = {
   Settings: {
     title: "Your notes, your rhythm.",
     description: "Choose when and how you want to review.",
-    next: "Vault, calendar, review-time, and notification settings are not available yet.",
+    next: "Calendar, review-time, and notification settings are coming later.",
   },
 };
 
@@ -54,6 +55,7 @@ export function App() {
           <p className="eyebrow">LOCAL NOTES</p>
           <h1 id="welcome-title">{content.title}</h1>
           <p className="description">{content.description}</p>
+          {section !== "Reviews" && <VaultPanel />}
           <p className="milestone">{content.next}</p>
         </section>
         <footer>Stored locally. Made to revisit.</footer>
