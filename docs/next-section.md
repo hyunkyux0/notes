@@ -1,7 +1,8 @@
-After this vault-selection PR is merged, implement the next small part of section 2:
-create, list, and read local Markdown notes in the selected vault, with stable note
-IDs and safe filenames. Preserve existing files and reject paths outside the vault.
-Keep Markdown authoritative; defer the full editor, autosave, search, and Google
-integration. Add meaningful storage tests, review structure, consolidate actual
-duplication, self-review, validate, and open a focused PR with Summary, How to review,
-and How to test. Send the Telegram review ping and stop for human review.
+After this create/list/read PR is merged, implement the next part of section 2:
+plain-text note editing with safe autosave and detection of conflicting external
+changes. Preserve stable IDs and existing content; surface conflicts instead of
+silently overwriting external edits. Keep Markdown authoritative and operations
+inside the selected vault. Defer rename/move, rich Markdown editing, search, and
+Google integration. Add meaningful persistence/conflict tests, review structure,
+consolidate actual duplication, self-review, validate, and open a focused PR with
+Summary, How to review, and How to test. Send the Telegram ping and stop for review.

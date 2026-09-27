@@ -1,15 +1,8 @@
 //! Only the native picker supplies paths; the frontend cannot submit arbitrary paths.
+use crate::app_settings::settings_path;
 use crate::vault::{self, Vault};
-use std::path::PathBuf;
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 use tauri_plugin_dialog::DialogExt;
-
-fn settings_path(app: &AppHandle) -> Result<PathBuf, String> {
-    app.path()
-        .app_config_dir()
-        .map(|directory| directory.join("vault.json"))
-        .map_err(|_| "App settings are unavailable.".into())
-}
 
 #[tauri::command]
 pub async fn get_vault(app: AppHandle) -> Result<Option<Vault>, String> {
