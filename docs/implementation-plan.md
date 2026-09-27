@@ -37,6 +37,6 @@ Use the personal `github-telegram-pr` skill at
 `~/agent-skills/github-telegram-pr/SKILL.md`. The shared bot is maintained outside
 this project at `~/github-telegram-pr`; setup instructions are in its README.
 Send a Telegram review ping after each reviewable section using
-`python3 ~/github-telegram-pr/review-bot.py ping NUMBER --project /Users/kyu/notes --next-step-file PATH`,
+`python3 ~/github-telegram-pr/review-bot.py ping NUMBER --project "$PWD" --next-step-file PATH`,
 where PATH contains the next agreed section. Stop at this human checkpoint. If the
 bot is unavailable, report that fact; never claim a notification was sent.
