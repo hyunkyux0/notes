@@ -17,7 +17,7 @@ async function listVaultContents(vaultPath: string) {
   };
 }
 
-// VaultPanel keys this feature by vault path, giving each vault isolated state.
+// App keys this feature by vault path, giving each vault isolated state.
 export function useNotes(vaultPath: string) {
   const [folders, setFolders] = useState<string[]>([]);
   const [files, setFiles] = useState<string[]>([]);

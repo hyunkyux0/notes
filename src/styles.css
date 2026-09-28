@@ -26,112 +26,102 @@ a:focus-visible {
   outline-offset: 4px;
 }
 .workspace {
-  display: grid;
-  grid-template-columns: 220px 1fr;
-  min-height: 100dvh;
+  display: flex;
+  height: 100dvh;
+  overflow: hidden;
+}
+[hidden] {
+  display: none;
 }
 aside {
+  position: relative;
+  flex: none;
+  max-width: 70vw;
   background: var(--sidebar);
-  padding: 32px 20px;
+  border-right: 1px solid var(--line);
+  padding: 16px;
   display: flex;
   flex-direction: column;
+  min-height: 0;
 }
-.brand {
-  font-weight: 650;
-  letter-spacing: -0.03em;
-  padding: 0 12px 38px;
-}
-.brand span {
-  margin-right: 8px;
-}
-nav {
-  display: grid;
-  gap: 6px;
-}
-nav button {
+.vault-switch {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  padding: 8px;
   border: 0;
-  border-radius: 8px;
   background: transparent;
   text-align: left;
-  padding: 12px;
+  overflow-wrap: anywhere;
 }
-nav button[aria-pressed="true"] {
-  background: var(--selected);
-  font-weight: 600;
-}
-.sidebar-caption {
+.reviews-link {
   margin-top: auto;
-  padding: 32px 12px 0;
-  color: var(--muted);
-  font-size: 12px;
+  padding: 10px;
+}
+.sidebar-resizer {
+  position: absolute;
+  right: -3px;
+  top: 0;
+  width: 6px;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: col-resize;
+  touch-action: none;
+  z-index: 1;
+}
+.sidebar-resizer:hover,
+.sidebar-resizer:focus-visible {
+  background: var(--selected);
 }
 main {
+  flex: 1;
   display: flex;
   flex-direction: column;
   min-width: 0;
+  overflow: auto;
 }
 header {
   display: flex;
-  justify-content: space-between;
+  gap: 12px;
   align-items: center;
-  padding: 24px 36px;
+  padding: 12px 24px;
   border-bottom: 1px solid var(--line);
-  font-size: 13px;
 }
-.badge {
-  color: var(--muted);
-  border: 1px solid var(--line);
-  border-radius: 20px;
-  padding: 5px 10px;
+header button,
+.reviews-link {
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+}
+button[aria-pressed="true"] {
+  background: var(--selected);
+}
+.icon-button {
+  font-size: 22px;
+  padding: 6px 10px;
+}
+.settings-button {
+  margin-left: auto;
+}
+.editor-pane {
+  padding: 24px 36px;
+  flex: 1;
 }
 .welcome {
-  margin: auto;
-  padding: 64px 40px;
+  padding: 36px;
   max-width: 680px;
-}
-.eyebrow {
-  color: var(--muted);
-  letter-spacing: 0.18em;
-  font-size: 11px;
+  line-height: 1.6;
 }
 h1 {
-  font-family: Georgia, serif;
-  font-size: clamp(32px, 5vw, 54px);
-  line-height: 1.12;
-  font-weight: 400;
-  letter-spacing: -0.04em;
-  margin: 24px 0;
-}
-.description {
-  font-size: 18px;
-  line-height: 1.6;
-}
-.milestone {
-  color: var(--muted);
-  line-height: 1.6;
-  font-size: 14px;
-  margin-top: 32px;
-}
-.vault-panel {
-  margin-top: 28px;
-  padding: 20px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-}
-.vault-panel h2 {
-  margin: 0;
-  font-size: 16px;
-}
-.vault-path {
-  overflow-wrap: anywhere;
-  font-size: 14px;
-  line-height: 1.6;
+  font-size: 28px;
+  font-weight: 500;
 }
 .vault-hint {
   color: var(--muted);
   font-size: 12px;
   line-height: 1.6;
-  margin-bottom: 0;
 }
 .primary-button {
   border: 1px solid var(--line);
@@ -148,11 +138,6 @@ button:disabled {
   font-size: 14px;
   line-height: 1.5;
 }
-footer {
-  padding: 24px 36px;
-  color: var(--muted);
-  font-size: 12px;
-}
 .skip-link {
   position: absolute;
   left: 16px;
@@ -165,27 +150,13 @@ footer {
   top: 8px;
 }
 @media (max-width: 640px) {
-  .workspace {
-    grid-template-columns: 1fr;
-  }
   aside {
-    padding: 16px;
-  }
-  .brand {
-    padding-bottom: 16px;
-  }
-  nav {
-    grid-template-columns: repeat(3, 1fr);
-  }
-  .sidebar-caption {
-    display: none;
+    padding: 12px;
+    max-width: 55vw;
   }
   header,
-  footer {
-    padding: 20px;
-  }
-  .welcome {
-    padding: 40px 24px;
+  .editor-pane {
+    padding: 12px;
   }
 }
 @media (prefers-color-scheme: dark) {
@@ -201,14 +172,19 @@ footer {
 }
 
 .notes-panel {
-  margin-top: 28px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: auto;
+  flex: 1;
+  font-size: 13px;
 }
-.notes-panel form {
+form {
   display: grid;
   gap: 10px;
   margin-bottom: 20px;
 }
-.notes-panel input {
+input {
   font: inherit;
   color: inherit;
   background: var(--sidebar);
@@ -218,9 +194,10 @@ footer {
   min-width: 0;
 }
 .note-list {
-  max-height: 240px;
+  min-height: 120px;
+  flex: 1;
   overflow: auto;
-  padding-left: 20px;
+  padding-left: 0;
 }
 .note-list button {
   background: transparent;
@@ -228,11 +205,12 @@ footer {
   text-align: left;
   overflow-wrap: anywhere;
   padding: 8px;
+  border-radius: 4px;
 }
 .note-list button[aria-pressed="true"] {
   background: var(--selected);
 }
-.notes-panel h2 {
+.editor-pane h2 {
   font-size: 16px;
   overflow-wrap: anywhere;
 }
@@ -247,11 +225,32 @@ footer {
 textarea.note-content {
   display: block;
   width: 100%;
-  min-height: 260px;
+  min-height: 40vh;
+  background: transparent;
   resize: vertical;
   color: inherit;
   border: 1px solid var(--line);
   font:
     14px / 1.6 ui-monospace,
     monospace;
+}
+
+.note-list ul {
+  list-style: none;
+  margin: 0;
+  padding-left: 14px;
+}
+.note-list > ul {
+  padding-left: 0;
+}
+.notes-panel details {
+  margin-bottom: 10px;
+}
+.notes-panel summary {
+  cursor: pointer;
+  padding: 6px 0;
+  font-weight: 600;
+}
+.editor-pane form {
+  max-width: 560px;
 }

@@ -1,67 +1,203 @@
-import { useState } from "react";
-import { VaultPanel } from "./vault/VaultPanel";
+import { invoke, isTauri } from "@tauri-apps/api/core";
+import { type ReactNode, useEffect, useState } from "react";
+import { NotesPanel } from "./notes/NotesPanel";
 
-const sections = {
-  Notebook: {
-    title: "A quiet place to think.",
-    description: "Keep your ideas in Markdown files on your computer.",
-    next: "Changes save automatically. Conflicting external edits keep your draft for recovery.",
-  },
-  Reviews: {
-    title: "Make room to remember.",
-    description: "Return to your notes after 3, 7, and 30 days.",
-    next: "Review scheduling and Google Calendar connection are planned for later milestones.",
-  },
-  Settings: {
-    title: "Your notes, your rhythm.",
-    description: "Choose when and how you want to review.",
-    next: "Calendar, review-time, and notification settings are coming later.",
-  },
-};
+type Vault = { path: string };
+type Section = "Notebook" | "Reviews" | "Settings";
 
 export function App() {
-  const [section, setSection] = useState<keyof typeof sections>("Notebook");
-  const content = sections[section];
+  const [section, setSection] = useState<Section>("Notebook");
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarWidth, setSidebarWidth] = useState(280);
+  const desktop = isTauri();
+  const [vault, setVault] = useState<Vault | null>(null);
+  const [busy, setBusy] = useState(desktop);
+  const [error, setError] = useState<string | null>(null);
 
-  return (
-    <div className="workspace">
-      <a className="skip-link" href="#content">
-        Skip to content
-      </a>
-      <aside>
-        <div className="brand">
-          <span aria-hidden="true">✳</span> Local Notes
-        </div>
-        <nav aria-label="Main navigation">
-          {(Object.keys(sections) as (keyof typeof sections)[]).map((name) => (
+  useEffect(() => {
+    if (!desktop) return;
+    let active = true;
+    invoke<Vault | null>("get_vault")
+      .then((saved) => {
+        if (active) setVault(saved);
+      })
+      .catch((reason: unknown) => {
+        if (active) setError(String(reason));
+      })
+      .finally(() => {
+        if (active) setBusy(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [desktop]);
+
+  async function choose() {
+    setBusy(true);
+    try {
+      const selected = await invoke<Vault | null>("choose_vault");
+      if (selected) {
+        setVault(selected);
+        setError(null);
+      }
+    } catch (reason) {
+      setError(String(reason));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const vaultName =
+    vault?.path.split(/[\\/]/).filter(Boolean).at(-1) || vault?.path;
+  function resizeSidebar(width: number) {
+    setSidebarWidth(Math.max(200, Math.min(480, width)));
+  }
+
+  // NotesPanel keeps shared note state; this callback places its navigation and editor
+  // in the workspace without duplicating that state or moving it through a global store.
+  function renderWorkspace(navigation: ReactNode, editor: ReactNode) {
+    return (
+      <div className="workspace">
+        <a className="skip-link" href="#content">
+          Skip to content
+        </a>
+        <aside
+          id="vault-sidebar"
+          aria-label="Vault sidebar"
+          hidden={!sidebarOpen}
+          style={{ width: sidebarWidth }}
+        >
+          <div className="vault-control" aria-busy={busy}>
             <button
-              key={name}
               type="button"
-              aria-pressed={section === name}
-              onClick={() => setSection(name)}
+              className="vault-switch"
+              title={vault ? `Switch vault: ${vault.path}` : "Open vault"}
+              aria-label={vault ? `Switch vault: ${vaultName}` : "Open vault"}
+              onClick={choose}
+              disabled={busy || !desktop}
             >
-              {name}
+              <strong>{vaultName || "Open vault"}</strong>
+              <span aria-hidden="true"> ▾</span>
             </button>
-          ))}
-        </nav>
-        <p className="sidebar-caption">Space for your next idea.</p>
-      </aside>
-      <main id="content" tabIndex={-1}>
-        <header>
-          <span>{section}</span>
-          <span className="badge">Early preview</span>
-        </header>
-        <section className="welcome" aria-labelledby="welcome-title">
-          <p className="eyebrow">LOCAL NOTES</p>
-          <h1 id="welcome-title">{content.title}</h1>
-          <p className="description">{content.description}</p>
-          {section !== "Reviews" && (
-            <VaultPanel showNotes={section === "Notebook"} />
+            {busy && <p>Opening vault…</p>}
+            {error && <p role="alert">{error}</p>}
+            {!desktop && (
+              <p className="vault-hint">
+                Open the desktop app to choose a local folder.
+              </p>
+            )}
+          </div>
+          {navigation}
+          <button
+            type="button"
+            className="reviews-link"
+            aria-pressed={section === "Reviews"}
+            onClick={() => setSection("Reviews")}
+          >
+            Reviews
+          </button>
+          <button
+            type="button"
+            className="sidebar-resizer"
+            aria-label="Resize sidebar"
+            title="Drag to resize; use left and right arrow keys when focused"
+            onKeyDown={(event) => {
+              if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+                event.preventDefault();
+                resizeSidebar(
+                  sidebarWidth + (event.key === "ArrowLeft" ? -20 : 20),
+                );
+              }
+            }}
+            onPointerDown={(event) => {
+              if (event.button !== 0) return;
+              event.currentTarget.setPointerCapture(event.pointerId);
+            }}
+            onPointerMove={(event) => {
+              if (event.currentTarget.hasPointerCapture(event.pointerId))
+                resizeSidebar(event.clientX);
+            }}
+            onPointerUp={(event) => {
+              if (event.currentTarget.hasPointerCapture(event.pointerId))
+                event.currentTarget.releasePointerCapture(event.pointerId);
+            }}
+          />
+        </aside>
+        <main id="content" tabIndex={-1}>
+          <header>
+            <button
+              type="button"
+              className="icon-button"
+              aria-controls="vault-sidebar"
+              aria-expanded={sidebarOpen}
+              aria-label={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
+              title={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+            >
+              ☰
+            </button>
+            <button
+              type="button"
+              aria-pressed={section === "Notebook"}
+              onClick={() => setSection("Notebook")}
+            >
+              Notebook
+            </button>
+            <button
+              type="button"
+              className="icon-button settings-button"
+              aria-label="Settings"
+              title="Settings"
+              aria-pressed={section === "Settings"}
+              onClick={() =>
+                setSection(section === "Settings" ? "Notebook" : "Settings")
+              }
+            >
+              ⚙
+            </button>
+          </header>
+          {/* Hide auxiliary views without unmounting the editor or interrupting saves. */}
+          <div className="editor-pane" hidden={section !== "Notebook"}>
+            {editor}
+          </div>
+          {section === "Settings" && (
+            <section className="welcome">
+              <h1>Settings</h1>
+              <p>
+                Calendar, review-time, and notification settings are coming
+                later.
+              </p>
+            </section>
           )}
-          <p className="milestone">{content.next}</p>
-        </section>
-        <footer>Stored locally. Made to revisit.</footer>
-      </main>
-    </div>
+          {section === "Reviews" && (
+            <section className="welcome">
+              <h1>Reviews</h1>
+              <p>
+                Return to your notes after 3, 7, and 30 days. Review scheduling
+                and Google Calendar connection are planned for later milestones.
+              </p>
+            </section>
+          )}
+        </main>
+      </div>
+    );
+  }
+
+  return vault ? (
+    <NotesPanel
+      key={vault.path}
+      vaultPath={vault.path}
+      renderWorkspace={renderWorkspace}
+      onOpenNote={() => setSection("Notebook")}
+    />
+  ) : (
+    renderWorkspace(
+      null,
+      <p className="welcome">
+        {busy
+          ? "Opening vault…"
+          : "Open a vault from the sidebar to start writing."}
+      </p>,
+    )
   );
 }
