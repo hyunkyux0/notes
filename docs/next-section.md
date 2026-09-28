@@ -1,10 +1,11 @@
-After this workspace-layout PR is merged, implement only the CodeMirror foundation
-checkpoint in section 3. Replace the plain textarea with a CodeMirror 6 Markdown
-editor with syntax highlighting and standard editing behavior. Preserve stable IDs,
-Markdown files, autosave, recovery drafts, conflict handling, folder navigation,
-and rename/move protections. Keep this PR to the editor foundation; default inline
-live preview and the Source mode toggle follow in the next separate checkpoint,
-then KaTeX equations and local images. Defer search and Google integration. Add
-meaningful editor/persistence regression tests, review structure and naming,
-consolidate actual duplication, self-review, validate, and open a focused PR with
-Summary, How to review, and How to test. Send the Telegram ping and stop for review.
+After this CodeMirror foundation PR is merged, implement the live Markdown formatting
+checkpoint in section 3. Make inline live preview the default: format headings,
+emphasis, lists, links, and code while revealing Markdown syntax around the active
+editing region. Provide a Source mode toggle without rewriting the Markdown or
+losing selection, undo/redo, or recovery drafts. Preserve autosave, conflicts,
+stable IDs, folder navigation, and rename/move protections. Keep note HTML inert
+and preserve the content security policy. Defer equations, images, search, and
+Google integration. Keep changes reviewable, add meaningful editing/persistence
+regression tests, review structure and naming, consolidate actual duplication,
+self-review, validate, and open a focused PR with Summary, How to review, and How
+to test. Send the Telegram ping and stop for human review.
