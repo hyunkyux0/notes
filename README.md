@@ -1,8 +1,8 @@
 # Local Notes
 
 A local-first Markdown notebook with planned Google Calendar review reminders.
-The desktop app remembers a local notes folder, creates Markdown notes, and lists
-and reads existing notes. Editing and calendar integration are not implemented yet.
+The desktop app remembers a local notes folder, creates Markdown notes, and edits
+them with autosave and conflict recovery. Calendar integration is not implemented yet.
 
 ## Development
 
@@ -36,13 +36,17 @@ Use `npm run dev` for the browser-only UI preview. To check and compile:
 npm run check
 npm run desktop:build
 cargo test --release --locked --manifest-path src-tauri/Cargo.toml
+npx playwright install chromium
+npm run test:ui
 ```
 
 The build currently produces a native executable in `src-tauri/target/release/`.
 Installers, signing, and notarization come in the release milestone.
 Rust tests cover vault validation, settings persistence, cancellation, and recovery
 from missing folders, corrupt settings, and failed saves. Note tests cover stable
-IDs, filename collisions, existing-file preservation, and invalid paths/content.
+IDs, filename collisions, existing-file preservation, invalid paths/content, and
+atomic saves/conflicts. UI tests use mocked desktop commands to check autosave,
+draft recovery, and failure handling; they do not replace native interaction tests.
 
 ## Choose a vault
 
@@ -53,25 +57,45 @@ keeps the current selection. Existing folder contents are not modified.
 If a saved folder becomes unavailable, reconnect it and restart, or choose another.
 The browser preview cannot select local folders.
 
-## Create and read notes
+## Create and edit notes
 
 In Notebook, enter a title and select Create note. The file contains a heading and
 a `<!-- local-notes-id: UUID -->` first line, which preserves its identity when
 renamed or moved with its content intact. Filenames use a sanitized title plus UUID;
 repeated titles create separate files. Existing files are never replaced.
 
-The list currently includes regular `.md` files directly in the vault, with a
-read-only plain-text view (UTF-8, up to 2 MiB). Use Refresh notes after external
-changes. Subfolders, editing, and rendered previews come later. Existing Markdown
-without our ID comment is readable and remains unchanged; no ID is assigned on read.
+The list includes regular `.md` files directly in the vault (UTF-8, up to 2 MiB),
+plus files with recovery drafts, including deleted files. Use Refresh notes after
+external changes. Subfolders and rendered previews come later. Existing Markdown
+without our ID comment keeps its format; editing does not insert an ID into it.
 If a new-file write fails partway through, its incomplete file may remain; the app
 reports this so you can inspect it before retrying.
+
+Edits autosave after 750 ms without typing. The ID line is preserved outside the
+editable text. Drafts are retained in this app's local WebView storage before an
+edit is accepted, and reopened with the note after navigation or restart. A storage
+failure pauses editing rather than accepting an unprotected change. Markdown is
+the saved source of truth; drafts are recovery copies, not backups.
+
+Saving compares the file with the version you opened. A conflict or save failure
+retains the draft and pauses autosave. Copy any text you need before choosing
+Reload disk version and confirming discard, or use Retry save for transient errors.
+No filesystem watcher or automatic merge is implemented yet.
+
+Safe replacement currently requires macOS/Linux and a filesystem supporting atomic
+file exchange. If another editor replaces the file during saving, both versions are
+preserved: your draft becomes the note, and the displaced version remains at the
+`.notes-save-*.tmp` location named in the error. Inspect that file before continuing;
+these recovery files are not automatically deleted. Ordinary successful saves clean
+up their temporary file. Editors writing through an old, already-open file handle
+after replacement do not participate in this conflict protocol.
 
 ## Structure
 
 - `src/`: React interface and styles.
 - `src/vault/`: vault selection interface.
-- `src/notes/`: note creation, file list, and read-only view.
+- `src/notes/NoteEditor.tsx`: editing and autosave lifecycle, kept beside the view.
+- `src/notes/noteDrafts.ts`: recovery storage shared by the editor and note list.
 - `src-tauri/src/notes.rs`: Markdown storage scoped to an open vault directory.
 - `src-tauri/src/note_commands.rs`: shared vault validation and async command adapter.
 - `src-tauri/src/app_settings.rs`: application settings location shared by commands.

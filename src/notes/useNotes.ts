@@ -1,9 +1,13 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useRef, useState } from "react";
 
-type Note = { filename: string; id: string | null; content: string };
-const listNotes = (vaultPath: string) =>
-  invoke<string[]>("list_notes", { vaultPath });
+import { draftFilenames, draftKey, readDraft } from "./noteDrafts";
+
+export type Note = { filename: string; id: string | null; content: string };
+async function listNotes(vaultPath: string) {
+  const diskFiles = await invoke<string[]>("list_notes", { vaultPath });
+  return [...new Set([...diskFiles, ...draftFilenames(vaultPath)])].sort();
+}
 
 // VaultPanel keys this feature by vault path, giving each vault isolated state.
 export function useNotes(vaultPath: string) {
@@ -62,7 +66,16 @@ export function useNotes(vaultPath: string) {
   function openNote(filename: string) {
     return run(async () => {
       setNote(null);
-      setNote(await invoke<Note>("read_note", { vaultPath, filename }));
+      try {
+        setNote(await invoke<Note>("read_note", { vaultPath, filename }));
+      } catch (reason) {
+        const recovery = readDraft(draftKey(vaultPath, filename));
+        if (!recovery) throw reason;
+        setNote({ filename, id: null, content: recovery.expected });
+        setError(
+          "The disk file is unavailable. Showing its recovery draft so you can copy it.",
+        );
+      }
     });
   }
 

@@ -10,5 +10,9 @@ filenames. Directory handles from [cap-std](https://github.com/bytecodealliance/
 confine note access to the vault, including symlink resolution; links are excluded
 from listing and rejected during read validation. New files use exclusive creation
 to prevent overwrites. Content is displayed as escaped text, not executable HTML.
+Autosave stages a complete file inside the vault, checks the expected contents,
+and exchanges files atomically. A displaced version that differs from the expected
+contents is retained for recovery. Draft text is also stored unencrypted in the
+app's local WebView storage; it is removed when saved or explicitly discarded.
 There is no Google connection yet. As capabilities are added, grant only the access
 needed for the selected vault and explicit features.

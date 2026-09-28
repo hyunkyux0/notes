@@ -12,6 +12,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             note_commands::list_notes,
             note_commands::read_note,
+            note_commands::save_note,
             note_commands::create_note,
             vault_commands::get_vault,
             vault_commands::choose_vault,

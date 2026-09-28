@@ -10,3 +10,6 @@ src-tauri/target/
 src-tauri/gen/schemas/
 .local/
 *.log
+
+/test-results/
+/playwright-report/

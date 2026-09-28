@@ -5,7 +5,7 @@ const sections = {
   Notebook: {
     title: "A quiet place to think.",
     description: "Keep your ideas in Markdown files on your computer.",
-    next: "Create a note or read an existing Markdown file. Editing is coming next.",
+    next: "Changes save automatically. Conflicting external edits keep your draft for recovery.",
   },
   Reviews: {
     title: "Make room to remember.",

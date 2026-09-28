@@ -46,3 +46,17 @@ pub async fn create_note(
 ) -> Result<Note, String> {
     in_vault(app, vault_path, move |dir| notes::create(&dir, &title)).await
 }
+
+#[tauri::command]
+pub async fn save_note(
+    app: AppHandle,
+    vault_path: String,
+    filename: String,
+    expected_content: String,
+    body: String,
+) -> Result<Note, String> {
+    in_vault(app, vault_path, move |dir| {
+        notes::save(&dir, &filename, &expected_content, &body)
+    })
+    .await
+}
