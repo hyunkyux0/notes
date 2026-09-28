@@ -649,6 +649,29 @@ test("editor styles use the provided nonce under a restrictive style policy", as
       ),
     ),
   ).toBe(true);
+  await expect(page.getByRole("status")).toHaveText("Saved");
+  await page.evaluate(() => {
+    const violations: string[] = [];
+    document.documentElement.dataset.equationPolicyViolations = "[]";
+    document.addEventListener("securitypolicyviolation", (event) => {
+      violations.push(
+        `${event.effectiveDirective}: ${event.blockedURI} at ${event.sourceFile}:${event.lineNumber}`,
+      );
+      document.documentElement.dataset.equationPolicyViolations =
+        JSON.stringify(violations);
+    });
+  });
+  await page.evaluate(() =>
+    localStorage.setItem("test:disk", "Intro\n\n$\\frac{a}{b}$\n\nend"),
+  );
+  await page.getByRole("button", { name: "Refresh notes" }).click();
+  await page.getByRole("button", { name: "study.md", exact: true }).click();
+  await expect(page.locator(".equation-preview .mfrac")).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.dataset.equationPolicyViolations,
+    ),
+  ).toBe("[]");
 });
 
 test("live preview formats inactive Markdown and reveals the line being edited", async ({
@@ -741,5 +764,107 @@ test("reference links, multiline syntax, and images retain their Markdown source
   await expect(editor).toContainText("[one][ref] and [short]");
   expect(await page.evaluate((key) => localStorage.getItem(key), diskKey)).toBe(
     source,
+  );
+});
+
+test("inline and display equations render, reveal source, and save exact LaTeX", async ({
+  page,
+}) => {
+  const source = String.raw`Intro
+
+Energy $E=mc^2$.
+
+$$
+\frac{a}{b} = \sqrt{x}
+$$
+
+end`;
+  await page.evaluate(
+    (source) => localStorage.setItem("test:disk", source),
+    source,
+  );
+  await page.reload();
+  await page.getByRole("button", { name: "study.md", exact: true }).click();
+  await expect(page.locator(".equation-preview .katex")).toHaveCount(2);
+  await expect(page.locator(".equation-display .katex-display")).toBeVisible();
+  await page.getByRole("button", { name: "Edit equation" }).first().click();
+  await expect(page.getByLabel("Markdown content")).toContainText("$E=mc^2$");
+  await expect(page.locator(".equation-preview .katex")).toHaveCount(1);
+  await page.getByRole("button", { name: "Source mode" }).click();
+  await expect(page.locator(".katex")).toHaveCount(0);
+  const edited = source.replace("mc^2", "mc^3");
+  await page.getByLabel("Markdown content").fill(edited);
+  await expect
+    .poll(() => page.evaluate((key) => localStorage.getItem(key), diskKey))
+    .toBe(edited);
+  await page.getByRole("button", { name: "Source mode" }).click();
+  await expect(page.locator(".equation-preview .katex")).toHaveCount(2);
+  await page.locator(".equation-display").focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByLabel("Markdown content")).toContainText(
+    String.raw`\frac{a}{b}`,
+  );
+  await expect(page.locator(".equation-display")).toHaveCount(0);
+});
+
+test("invalid and untrusted equations preserve source without active HTML or URLs", async ({
+  page,
+}) => {
+  const source = String.raw`Intro
+
+$\frac{1}{$
+
+$\href{javascript:alert(1)}{click}$
+
+$\includegraphics{https://example.com/tracker.png}$
+
+$\def\loop{\loop}\loop$
+
+end`;
+  await page.evaluate(
+    (source) => localStorage.setItem("test:disk", source),
+    source,
+  );
+  await page.reload();
+  await page.getByRole("button", { name: "study.md", exact: true }).click();
+  await expect(page.locator(".equation-error")).toHaveCount(2);
+  await expect(
+    page.locator(
+      ".equation-preview a, .equation-preview img, .equation-preview script",
+    ),
+  ).toHaveCount(0);
+  expect(await page.evaluate((key) => localStorage.getItem(key), diskKey)).toBe(
+    source,
+  );
+  await page.locator(".equation-error").first().click();
+  await expect(page.getByLabel("Markdown content")).toContainText(
+    String.raw`$\frac{1}{$`,
+  );
+  expect(
+    await page.evaluate((key) => localStorage.getItem(key), draftKey),
+  ).toBeNull();
+});
+
+test("code, escaped dollars, currency, and unmatched math stay literal", async ({
+  page,
+}) => {
+  const document = [
+    "Intro",
+    String.raw`\$literal\$ and $5 and $10`,
+    "`$x$`",
+    "```\n$$\nx\n$$\n```",
+    "> $$x$$",
+    "- $$x$$",
+    "$$\nunclosed",
+  ].join("\n\n");
+  await page.evaluate(
+    (source) => localStorage.setItem("test:disk", source),
+    document,
+  );
+  await page.reload();
+  await page.getByRole("button", { name: "study.md", exact: true }).click();
+  await expect(page.locator(".equation-preview")).toHaveCount(0);
+  expect(await page.evaluate((key) => localStorage.getItem(key), diskKey)).toBe(
+    document,
   );
 });

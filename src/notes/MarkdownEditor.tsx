@@ -6,6 +6,7 @@ import { EditorView, keymap } from "@codemirror/view";
 import { tags } from "@lezer/highlight";
 import { useLayoutEffect, useRef, useState } from "react";
 
+import { equationSyntax } from "./equations";
 import { liveMarkdownPreview } from "./liveMarkdownPreview";
 
 const markdownHighlighting = HighlightStyle.define([
@@ -40,7 +41,7 @@ export function MarkdownEditor({ value, disabled, onEdit }: Props) {
   useLayoutEffect(() => {
     if (!host.current) return;
     extensions.current = [
-      markdown(),
+      markdown({ extensions: [equationSyntax] }),
       preview.current.of(liveMarkdownPreview),
       syntaxHighlighting(markdownHighlighting),
       history(),
