@@ -74,7 +74,13 @@ formatted while Markdown syntax appears on the selected lines (or the enclosing
 code block). **Source mode** exposes all Markdown without changing text, selection,
 undo history, or drafts. Links are styled text; clicking edits them rather than
 opening a URL. HTML stays literal text. Fence and setext delimiter lines keep their
-line breaks for reliable cursor navigation. Equations and images come later. Tab moves focus out of the editor. Existing Markdown
+line breaks for reliable cursor navigation. Equations use `$...$` on one line or root-level `$$...$$` display blocks (delimiters
+may be on separate lines). Clicking a rendered equation, placing the cursor in it,
+or enabling Source mode exposes the original LaTeX. Invalid or oversized expressions
+remain visible as source with an edit tooltip. Inline delimiters cannot have inner
+edge whitespace; escape currency dollar signs with `\$`. Code and unmatched math
+remain literal. Display math in nested lists/quotes and other delimiter styles are
+not yet supported. Images come later. Tab moves focus out of the editor. Existing Markdown
 without our ID comment keeps its format; editing does not insert an ID into it.
 If a new-file write fails partway through, its incomplete file may remain; the app
 reports this so you can inspect it before retrying.
@@ -125,6 +131,7 @@ detected after the move reports the new location so you can refresh the list.
 
 - `src/`: React interface and styles.
 - `src/App.tsx`: vault selection and workspace layout.
+- `src/notes/equations.ts`: math syntax and bounded, untrusted KaTeX rendering.
 - `src/notes/liveMarkdownPreview.ts`: syntax-tree decorations; no stored-text changes.
 - `src/notes/MarkdownEditor.tsx`: CodeMirror lifecycle and accepted-edit boundary.
 - `src/notes/NoteEditor.tsx`: editing and autosave lifecycle, kept beside the view.

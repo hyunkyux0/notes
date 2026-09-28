@@ -288,3 +288,20 @@ input {
   color: var(--syntax);
   text-decoration: underline;
 }
+
+.equation-preview {
+  border: 0;
+  padding: 2px 4px;
+  background: transparent;
+  color: inherit;
+}
+.equation-display {
+  display: block;
+  width: 100%;
+  overflow-x: auto;
+}
+.equation-error {
+  color: var(--error);
+  white-space: pre-wrap;
+  text-align: left;
+}

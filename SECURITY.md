@@ -18,3 +18,9 @@ contents is retained for recovery. Draft text is also stored unencrypted in the
 app's local WebView storage; it is removed when saved or explicitly discarded.
 There is no Google connection yet. As capabilities are added, grant only the access
 needed for the selected vault and explicit features.
+
+Equation rendering uses KaTeX with `trust: false`, fresh macros per expression,
+500 maximum macro expansions, 20em user-specified size limits, and a 4096-character
+preview limit. Errors are displayed through textContent, never raw exception HTML.
+KaTeX CSS/fonts are bundled locally; the existing content security policy remains
+unchanged. Source text is authoritative regardless of rendering success.

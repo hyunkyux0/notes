@@ -7,6 +7,8 @@ import {
   WidgetType,
 } from "@codemirror/view";
 
+import { EquationWidget } from "./equations";
+
 class BulletMarker extends WidgetType {
   toDOM() {
     const marker = document.createElement("span");
@@ -38,6 +40,21 @@ function previewDecorations(state: EditorState): DecorationSet {
   syntaxTree(state).iterate({
     enter(node) {
       const { from, to, name } = node;
+      if (name === "InlineMath" || name === "DisplayMath") {
+        if (!active(from, to))
+          decorations.push(
+            Decoration.replace({
+              widget: new EquationWidget(
+                state.sliceDoc(from, to),
+                name === "DisplayMath",
+                from,
+              ),
+              block: name === "DisplayMath",
+            }).range(from, to),
+          );
+        return false;
+      }
+      if (name === "UnclosedMath") return false;
       if (name === "Image") return false; // Attachments have a separate checkpoint.
       const parent = node.node.parent;
       const region = parent ?? node.node;
