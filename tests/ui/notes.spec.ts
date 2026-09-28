@@ -23,7 +23,15 @@ test.beforeEach(async ({ page }) => {
         const note = { filename, id: null, content };
         switch (command) {
           case "get_vault":
-            return { path: "/test/vault" };
+            return sessionStorage.getItem("test:no-vault")
+              ? null
+              : { path: "/test/vault" };
+          case "choose_vault":
+            if (sessionStorage.getItem("test:vault-error"))
+              throw "Vault unavailable";
+            return sessionStorage.getItem("test:choose-vault")
+              ? { path: sessionStorage.getItem("test:choose-vault") }
+              : null;
           case "list_vault_contents":
             return {
               files: sessionStorage.getItem("test:missing") ? [] : [filename],
@@ -309,10 +317,10 @@ test("moving into a folder updates listing, selection, and subsequent saves", as
   await expect(page.getByRole("status")).toHaveText("Saved");
   await page.reload();
   await page
-    .getByRole("button", { name: "Folder course", exact: true })
+    .getByRole("button", { name: "Expand folder course", exact: true })
     .click();
   await page
-    .getByRole("button", { name: "Folder course/week1", exact: true })
+    .getByRole("button", { name: "Expand folder course/week1", exact: true })
     .click();
   await page.getByRole("button", { name: destination, exact: true }).click();
   await expect(page.getByLabel("Markdown content")).toHaveValue(
@@ -342,6 +350,7 @@ test("a draft at the destination path blocks a move", async ({ page }) => {
 test("creates empty folders, navigates a nested tree, and creates a note there", async ({
   page,
 }) => {
+  await page.getByText("New folder", { exact: true }).click();
   await page.getByLabel("New folder name").fill("Courses");
   await page
     .getByRole("button", { name: "Create folder", exact: true })
@@ -350,8 +359,13 @@ test("creates empty folders, navigates a nested tree, and creates a note there",
     name: "Folder Courses",
     exact: true,
   });
-  await expect(courses).toHaveAttribute("aria-expanded", "false");
+  const expandCourses = page.getByRole("button", {
+    name: "Expand folder Courses",
+    exact: true,
+  });
+  await expect(expandCourses).toHaveAttribute("aria-expanded", "false");
   await courses.click();
+  await expect(expandCourses).toHaveAttribute("aria-expanded", "false");
   await page.getByLabel("New folder name").fill("Week1");
   await page
     .getByRole("button", { name: "Create folder", exact: true })
@@ -361,21 +375,24 @@ test("creates empty folders, navigates a nested tree, and creates a note there",
     exact: true,
   });
   await week.click();
+  await page.getByText("New note", { exact: true }).click();
   await page.getByLabel("New note title").fill("Lecture");
   await page.getByRole("button", { name: "Create note", exact: true }).click();
   await expect(
     page.getByRole("heading", { name: "Courses/Week1/new.md", exact: true }),
   ).toBeVisible();
-  await courses.click();
+  await page
+    .getByRole("button", { name: "Collapse folder Courses", exact: true })
+    .click();
   await expect(week).toBeHidden();
-  await courses.click();
+  await expandCourses.click();
   await page
     .getByRole("button", { name: "Courses/Week1/new.md", exact: true })
     .click();
   await expect(page.getByLabel("Markdown content")).toHaveValue("# Lecture\n");
   await page.reload();
   await page
-    .getByRole("button", { name: "Folder Courses", exact: true })
+    .getByRole("button", { name: "Expand folder Courses", exact: true })
     .click();
   await expect(
     page.getByRole("button", { name: "Folder Courses/Week1", exact: true }),
@@ -385,6 +402,7 @@ test("creates empty folders, navigates a nested tree, and creates a note there",
 test("folder errors retain input and navigating the tree preserves recovery drafts", async ({
   page,
 }) => {
+  await page.getByText("New folder", { exact: true }).click();
   await page.getByLabel("New folder name").fill("Empty");
   await page
     .getByRole("button", { name: "Create folder", exact: true })
@@ -423,10 +441,10 @@ test("tree exposes a recovery draft after its containing folder disappears", asy
   });
   await page.reload();
   await page
-    .getByRole("button", { name: "Folder Missing", exact: true })
+    .getByRole("button", { name: "Expand folder Missing", exact: true })
     .click();
   await page
-    .getByRole("button", { name: "Folder Missing/Sub", exact: true })
+    .getByRole("button", { name: "Expand folder Missing/Sub", exact: true })
     .click();
   await page
     .getByRole("button", { name: "Missing/Sub/recover.md", exact: true })
@@ -439,4 +457,111 @@ test("tree exposes a recovery draft after its containing folder disappears", asy
       "The disk file is unavailable. Showing its recovery draft so you can copy it.",
     ),
   ).toBeVisible();
+});
+
+test("sidebar layout resizes and collapses without losing the editor", async ({
+  page,
+}) => {
+  const sidebar = page.getByRole("complementary", { name: "Vault sidebar" });
+  const editor = page.getByRole("article", { name: "Note editor" });
+  await expect(
+    sidebar.getByRole("button", { name: "study.md", exact: true }),
+  ).toBeVisible();
+  await expect(
+    sidebar.getByRole("button", { name: "Switch vault: vault" }),
+  ).toBeVisible();
+  const initial = await sidebar.boundingBox();
+  const editorBox = await editor.boundingBox();
+  if (!initial || !editorBox)
+    throw new Error("Workspace panes are not visible");
+  expect(editorBox.x).toBeGreaterThanOrEqual(initial.x + initial.width);
+  const resize = page.getByRole("button", { name: "Resize sidebar" });
+  await resize.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(sidebar).toHaveCSS("width", "300px");
+  const handle = await resize.boundingBox();
+  if (!handle) throw new Error("Sidebar resize control is not visible");
+  await page.mouse.move(handle.x + 3, handle.y + 80);
+  await page.mouse.down();
+  await page.mouse.move(350, 80);
+  await page.mouse.up();
+  await expect(sidebar).toHaveCSS("width", "350px");
+  await page.getByLabel("Markdown content").fill("# Layout draft");
+  await page.getByRole("button", { name: "Hide sidebar" }).click();
+  await expect(sidebar).toBeHidden();
+  await expect(page.getByLabel("Markdown content")).toHaveValue(
+    "# Layout draft",
+  );
+  await page.getByRole("button", { name: "Show sidebar" }).click();
+  await expect(sidebar).toHaveCSS("width", "350px");
+  await page.setViewportSize({ width: 600, height: 600 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(
+    600,
+  );
+});
+
+test("settings and cancelled or failed vault switches preserve the open draft", async ({
+  page,
+}) => {
+  await page.evaluate(() => sessionStorage.setItem("test:delay", "1000"));
+  await page.getByLabel("Markdown content").fill("# Continue saving");
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
+  await expect(page.getByLabel("Markdown content")).toBeHidden();
+  await expect
+    .poll(() => page.evaluate((key) => localStorage.getItem(key), diskKey))
+    .toBe("# Continue saving");
+  await page.getByRole("button", { name: "study.md", exact: true }).click();
+  await expect(page.getByLabel("Markdown content")).toHaveValue(
+    "# Continue saving",
+  );
+  await page.getByRole("button", { name: "Switch vault: vault" }).click();
+  await expect(page.getByLabel("Markdown content")).toHaveValue(
+    "# Continue saving",
+  );
+  await page.evaluate(() => sessionStorage.setItem("test:vault-error", "yes"));
+  await page.getByRole("button", { name: "Switch vault: vault" }).click();
+  await expect(page.getByRole("alert")).toContainText("Vault unavailable");
+  await expect(page.getByLabel("Markdown content")).toHaveValue(
+    "# Continue saving",
+  );
+});
+
+test("no selected vault exposes Open vault in the sidebar", async ({
+  page,
+}) => {
+  await page.evaluate(() => sessionStorage.setItem("test:no-vault", "yes"));
+  await page.reload();
+  await expect(
+    page
+      .getByRole("complementary")
+      .getByRole("button", { name: "Open vault", exact: true }),
+  ).toBeEnabled();
+  await expect(
+    page.getByText("Open a vault from the sidebar to start writing."),
+  ).toBeVisible();
+});
+
+test("switching vaults isolates drafts and returning restores them", async ({
+  page,
+}) => {
+  await page.evaluate(() => sessionStorage.setItem("test:fail", "yes"));
+  await page.getByLabel("Markdown content").fill("# First vault draft");
+  await page.evaluate(() =>
+    sessionStorage.setItem("test:choose-vault", "/test/other"),
+  );
+  await page.getByRole("button", { name: "Switch vault: vault" }).click();
+  await page.getByRole("button", { name: "study.md", exact: true }).click();
+  await expect(page.getByLabel("Markdown content")).toHaveValue("# Original\n");
+  expect(
+    await page.evaluate((key) => localStorage.getItem(key), draftKey),
+  ).toContain("First vault draft");
+  await page.evaluate(() =>
+    sessionStorage.setItem("test:choose-vault", "/test/vault"),
+  );
+  await page.getByRole("button", { name: "Switch vault: other" }).click();
+  await page.getByRole("button", { name: "study.md", exact: true }).click();
+  await expect(page.getByLabel("Markdown content")).toHaveValue(
+    "# First vault draft",
+  );
 });

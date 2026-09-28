@@ -10,7 +10,9 @@ review history and sync state. Use CodeMirror 6 and KaTeX, with local attachment
 2. Local vault, notes, stable IDs, safe autosave, rename/move, external edit handling,
    folder creation, and an expandable folder/file tree for navigation. Show empty
    folders, open notes from the tree, and create notes in the selected folder.
-3. Markdown editor, equations, drag/drop and paste images, then live preview.
+3. Workspace layout and Obsidian-style live Markdown editing, delivered through
+   the separate review checkpoints below. Live preview is the default editing
+   experience; a Source mode toggle exposes raw Markdown.
 4. Review scheduler: 3, 7, 30 calendar days after first nonempty save; configurable
    intervals, alert time and timezone. Ordinary edits do not reset the schedule.
 5. Google OAuth and a dedicated Note Reviews calendar: 15-minute events, note path
@@ -22,6 +24,39 @@ review history and sync state. Use CodeMirror 6 and KaTeX, with local attachment
 8. Settings, search, review completion, rescheduling and sync recovery UI.
 9. Full workflow verification.
 10. MIT license, contribution/security documentation, screenshots and macOS release.
+
+## Next layout and editor checkpoints
+
+Complete these in order, with a focused PR and human review before advancing:
+
+1. **Workspace layout:** place the expandable folder/file tree in the left sidebar.
+   Put the vault name and open/switch control at the top left, replacing Local Notes;
+   show Open vault when none is selected. Move Settings to a small top-right gear
+   with an accessible label and tooltip. Make the sidebar resizable and collapsible,
+   with New note and New folder controls above the tree. A folder's chevron toggles
+   expansion; its name selects the destination for creation. Give the editor the
+   main area, with the note path and save/conflict status nearby. Reserve a compact
+   sidebar-bottom Reviews entry for scheduling. Preserve drafts during navigation.
+2. **CodeMirror foundation:** replace the textarea with CodeMirror 6, retaining
+   ordinary Markdown files, stable IDs, autosave, recovery drafts, conflict handling,
+   and rename/move protections. Add syntax highlighting and standard editing behavior.
+   This is the foundation checkpoint, not the completed live-preview experience.
+3. **Live Markdown formatting:** make inline live preview the default. Format
+   headings, emphasis, lists, links, and code while editing; reveal Markdown syntax
+   around the active editing region. Provide a Source mode toggle without converting
+   or rewriting the underlying Markdown. Preserve selection, undo/redo, and drafts
+   when switching modes. A separate preview pane is not the primary editing flow.
+4. **Equations:** render inline and display LaTeX with KaTeX in the editor; expose
+   the source when editing an equation. Handle invalid expressions without losing text.
+5. **Images:** show local images inline and support drag-and-drop and paste into
+   the editor, saving attachments inside the vault and inserting Markdown references.
+   Preserve existing attachments and apply vault path protections.
+
+Use meaningful persistence, navigation, and editing regression tests at each stage.
+This follows Obsidian's Markdown-based model rather than introducing a Notion-style
+block-storage format. Search, scheduling, and Google integration follow these stages.
+The updated layout checkpoint supersedes the earlier Telegram instruction to start
+CodeMirror immediately after the folder-tree PR.
 
 ## Review contract
 

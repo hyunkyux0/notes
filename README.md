@@ -50,7 +50,8 @@ draft recovery, and failure handling; they do not replace native interaction tes
 
 ## Choose a vault
 
-In Notebook or Settings, choose a folder using the native picker. Its canonical
+Use **Open vault** at the top left to choose a folder with the native picker.
+Once selected, click the vault name there to switch folders. Its canonical
 absolute path is stored in `vault.json` in Tauri's application configuration folder
 (on macOS, `~/Library/Application Support/io.github.hyunkyux0.notes/`). Canceling
 keeps the current selection. Existing folder contents are not modified.
@@ -95,10 +96,17 @@ To rename or move a saved note, enter its vault-relative path (including `.md`),
 such as `courses/week1/algebra.md`, and select Rename or move note. Destination
 folders must already exist. Use **New folder name** to create folders inside the
 selected folder (one level at a time). Click a folder in the navigation tree to
-select and expand/collapse it, or **Vault root** to select the root. New notes are
+select it; use its separate chevron to expand/collapse, or **Vault root** to select
+the root. Expand **New folder** or **New note** above the tree to show creation
+controls. New notes are
 created in the selected folder. Empty folders remain visible; click a Markdown
 file to open it. Use **Refresh notes** after external filesystem changes. Folder
 rename, move, and deletion are not implemented yet.
+
+Drag the sidebar edge (or focus it and use left/right arrow keys) to resize it.
+The top toolbar toggles sidebar visibility and opens Settings through the gear.
+Reviews stays at the bottom left. Settings, Reviews, and sidebar collapse keep the
+editor mounted so pending saves continue. Sidebar width/visibility reset on restart.
 Absolute paths, parent/dot components, hidden destination names, control characters,
 and certain special characters are rejected. Existing destinations
 are never replaced, including case-only collisions on case-insensitive filesystems.
@@ -110,7 +118,7 @@ detected after the move reports the new location so you can refresh the list.
 ## Structure
 
 - `src/`: React interface and styles.
-- `src/vault/`: vault selection interface.
+- `src/App.tsx`: vault selection and workspace layout.
 - `src/notes/NoteEditor.tsx`: editing and autosave lifecycle, kept beside the view.
 - `src/notes/noteDrafts.ts`: recovery storage shared by the editor and note list.
 - `src-tauri/src/notes.rs`: Markdown storage scoped to an open vault directory.

@@ -217,48 +217,6 @@ export function NoteEditor({
   return (
     <article aria-label="Note editor">
       <h2>{note.filename}</h2>
-      <form
-        onSubmit={(event) => {
-          event.preventDefault();
-          void renameNote();
-        }}
-      >
-        <label htmlFor="rename-note">Path within vault (including .md)</label>
-        <input
-          id="rename-note"
-          value={newFilename}
-          disabled={renaming}
-          onChange={(event) => setNewFilename(event.target.value)}
-          required
-        />
-        <button
-          type="submit"
-          disabled={
-            dirty ||
-            saving ||
-            reloading ||
-            renaming ||
-            !!error ||
-            newFilename === note.filename
-          }
-        >
-          Rename or move note
-        </button>
-        <p className="vault-hint">
-          Use / to move into an existing folder. Save or discard pending changes
-          first.
-        </p>
-        {renameError && <p role="alert">{renameError}</p>}
-      </form>
-      <label htmlFor="note-body">Markdown content</label>
-      <textarea
-        id="note-body"
-        className="note-content"
-        value={draft.body}
-        disabled={reloading || renaming || draftLoadFailed}
-        onChange={(event) => edit(event.target.value)}
-        spellCheck={false}
-      />
       <p role="status">
         {saving
           ? "Saving…"
@@ -268,6 +226,17 @@ export function NoteEditor({
               ? "Unsaved draft retained on this device"
               : "Saved"}
       </p>
+
+      <label htmlFor="note-body">Markdown content</label>
+      <textarea
+        id="note-body"
+        className="note-content"
+        value={draft.body}
+        disabled={reloading || renaming || draftLoadFailed}
+        onChange={(event) => edit(event.target.value)}
+        spellCheck={false}
+      />
+
       {error && <p role="alert">{error}</p>}
       {error && (
         <button
@@ -304,6 +273,39 @@ export function NoteEditor({
           </button>
         </div>
       )}
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          void renameNote();
+        }}
+      >
+        <label htmlFor="rename-note">Path within vault (including .md)</label>
+        <input
+          id="rename-note"
+          value={newFilename}
+          disabled={renaming}
+          onChange={(event) => setNewFilename(event.target.value)}
+          required
+        />
+        <button
+          type="submit"
+          disabled={
+            dirty ||
+            saving ||
+            reloading ||
+            renaming ||
+            !!error ||
+            newFilename === note.filename
+          }
+        >
+          Rename or move note
+        </button>
+        <p className="vault-hint">
+          Use / to move into an existing folder. Save or discard pending changes
+          first.
+        </p>
+        {renameError && <p role="alert">{renameError}</p>}
+      </form>
     </article>
   );
 }
