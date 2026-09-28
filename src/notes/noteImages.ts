@@ -29,6 +29,9 @@ export class ImageWidget extends WidgetType {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "note-image";
+    button.draggable = true;
+    button.dataset.imageFrom = String(this.from);
+    button.dataset.imageSource = this.source;
     button.textContent = "Loading image…";
     button.setAttribute("aria-label", "Edit image Markdown");
     button.onclick = () => {
@@ -45,6 +48,7 @@ export class ImageWidget extends WidgetType {
           if (!button.isConnected) return;
           const image = document.createElement("img");
           image.alt = "Local attachment";
+          image.draggable = false;
           image.src = data;
           image.onload = () => view.requestMeasure();
           image.onerror = () => {

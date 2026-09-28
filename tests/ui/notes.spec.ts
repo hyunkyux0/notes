@@ -1047,3 +1047,101 @@ test("file drops outside the editor cannot navigate the app", async ({
   ).toBe(true);
   await expect(page.getByLabel("Markdown content")).toContainText("Original");
 });
+
+test("image drops on the editor's empty area are imported", async ({
+  page,
+}) => {
+  await page.locator(".markdown-editor").evaluate((element) => {
+    const box = element.getBoundingClientRect();
+    const x = box.left + 30;
+    const y = box.bottom - 20;
+    const target = document.elementFromPoint(x, y);
+    if (!target) throw new Error("Missing drop target");
+    const transfer = new DataTransfer();
+    transfer.items.add(
+      new File([new Uint8Array([137, 80, 78, 71])], "screenshot.png", {
+        type: "image/png",
+      }),
+    );
+    target.dispatchEvent(
+      new DragEvent("drop", {
+        dataTransfer: transfer,
+        clientX: x,
+        clientY: y,
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+  });
+  await expect(page.getByLabel("Markdown content")).toContainText(
+    imageMarkdown,
+  );
+});
+
+for (const destination of ["Before", "After"]) {
+  test(`dragging a preview image to ${destination} moves its reference once`, async ({
+    page,
+  }) => {
+    const editor = page.getByLabel("Markdown content");
+    const original = `Before\n\n${imageMarkdown}\n\nAfter`;
+    await editor.fill(original);
+    await editor.press("ControlOrMeta+Home");
+    await expect(page.locator(".note-image img")).toBeVisible();
+    // A move must not call attachment import again.
+    await page.evaluate(() => sessionStorage.setItem("test:image-fail", "yes"));
+    const target = page
+      .locator(".cm-line")
+      .filter({ hasText: new RegExp(`^${destination}$`) });
+    await page
+      .locator(".note-image")
+      .dragTo(target, { targetPosition: { x: 1, y: 8 } });
+    const moved =
+      destination === "Before"
+        ? `${imageMarkdown}Before\n\n\n\nAfter`
+        : `Before\n\n\n\n${imageMarkdown}After`;
+    await expect
+      .poll(() => page.evaluate(() => localStorage.getItem("test:disk")))
+      .toBe(moved);
+    await expect(page.getByRole("alert")).toHaveCount(0);
+    await editor.press("ControlOrMeta+z");
+    await expect
+      .poll(() => page.evaluate(() => localStorage.getItem("test:disk")))
+      .toBe(original);
+    await editor.press("ControlOrMeta+Shift+z");
+    await expect
+      .poll(() => page.evaluate(() => localStorage.getItem("test:disk")))
+      .toBe(moved);
+  });
+}
+
+test("an edit during an image drag prevents deleting stale source positions", async ({
+  page,
+}) => {
+  const editor = page.getByLabel("Markdown content");
+  await editor.fill(`Before\n\n${imageMarkdown}\n\nAfter`);
+  await editor.press("ControlOrMeta+Home");
+  await expect(page.locator(".note-image img")).toBeVisible();
+  await page.locator(".note-image").evaluate((image) => {
+    image.dispatchEvent(
+      new DragEvent("dragstart", {
+        dataTransfer: new DataTransfer(),
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+  });
+  await editor.fill("New content must survive");
+  await editor.evaluate((element) => {
+    element.dispatchEvent(
+      new DragEvent("drop", {
+        dataTransfer: new DataTransfer(),
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+  });
+  await expect(page.getByRole("alert")).toContainText(
+    "The note changed during the drag",
+  );
+  await expect(editor).toHaveText("New content must survive");
+});

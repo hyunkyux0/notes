@@ -100,21 +100,6 @@ export function MarkdownEditor({
           );
           return true;
         },
-        dragover(event) {
-          if (!event.dataTransfer?.types.includes("Files")) return false;
-          event.preventDefault();
-          return true;
-        },
-        drop(event, editor) {
-          const files = Array.from(event.dataTransfer?.files ?? []);
-          if (!files.length) return false;
-          event.preventDefault();
-          const position =
-            editor.posAtCoords({ x: event.clientX, y: event.clientY }) ??
-            editor.state.selection.main.from;
-          void attach(files, editor, position);
-          return true;
-        },
       }),
       // Tauri gives this marker a fresh style nonce in production. Dev has no CSP.
       EditorView.cspNonce.of(
@@ -180,7 +165,96 @@ export function MarkdownEditor({
       },
     });
     view.current = editor;
+    // CodeMirror listens on its content only; blank space below it is also a drop target.
+    const dropArea = host.current;
+    let draggedImage: {
+      from: number;
+      to: number;
+      source: string;
+      doc: typeof editor.state.doc;
+    } | null = null;
+    const startImageDrag = (event: DragEvent) => {
+      const image =
+        event.target instanceof Element
+          ? event.target.closest<HTMLElement>(".note-image")
+          : null;
+      if (!image || !event.dataTransfer) return;
+      event.stopPropagation();
+      if (props.current.disabled || importing.current) {
+        event.preventDefault();
+        return;
+      }
+      const from = Number(image.dataset.imageFrom);
+      const source = image.dataset.imageSource ?? "";
+      if (
+        !source ||
+        editor.state.doc.sliceString(from, from + source.length) !== source
+      ) {
+        event.preventDefault();
+        return;
+      }
+      draggedImage = {
+        from,
+        to: from + source.length,
+        source,
+        doc: editor.state.doc,
+      };
+      // Retain the source range locally, never trust a range supplied by another window.
+      event.dataTransfer.setData("text/plain", source);
+      event.dataTransfer.effectAllowed = "copyMove";
+    };
+    const endImageDrag = () => {
+      draggedImage = null;
+    };
+    const acceptImageDrag = (event: DragEvent) => {
+      if (!draggedImage && !event.dataTransfer?.types.includes("Files")) return;
+      event.preventDefault();
+    };
+    const dropImage = (event: DragEvent) => {
+      const files = Array.from(event.dataTransfer?.files ?? []);
+      if (!draggedImage && !files.length) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const position = editor.posAtCoords(
+        { x: event.clientX, y: event.clientY },
+        false,
+      );
+      const image = draggedImage;
+      draggedImage = null;
+      if (image) {
+        if (props.current.disabled || importing.current) return;
+        if (!editor.state.doc.eq(image.doc)) {
+          setImageError(
+            "The note changed during the drag. Drag the image again.",
+          );
+          return;
+        }
+        if (position >= image.from && position <= image.to) return;
+        const insertion = { from: position, insert: image.source };
+        const removal = { from: image.from, to: image.to };
+        editor.dispatch({
+          changes:
+            position < image.from ? [insertion, removal] : [removal, insertion],
+          selection: {
+            anchor:
+              position < image.from ? position + image.source.length : position,
+          },
+          annotations: isolateHistory.of("full"),
+        });
+        editor.focus();
+        return;
+      }
+      void attach(files, editor, position);
+    };
+    dropArea.addEventListener("dragstart", startImageDrag, true);
+    window.addEventListener("dragend", endImageDrag);
+    dropArea.addEventListener("dragover", acceptImageDrag, true);
+    dropArea.addEventListener("drop", dropImage, true);
     return () => {
+      dropArea.removeEventListener("dragstart", startImageDrag, true);
+      window.removeEventListener("dragend", endImageDrag);
+      dropArea.removeEventListener("dragover", acceptImageDrag, true);
+      dropArea.removeEventListener("drop", dropImage, true);
       editor.destroy();
       view.current = null;
     };
