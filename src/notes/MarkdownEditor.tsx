@@ -4,7 +4,9 @@ import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { Compartment, EditorState, type Extension } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
 import { tags } from "@lezer/highlight";
-import { useLayoutEffect, useRef } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
+
+import { liveMarkdownPreview } from "./liveMarkdownPreview";
 
 const markdownHighlighting = HighlightStyle.define([
   { tag: tags.heading, color: "var(--syntax)", fontWeight: "600" },
@@ -23,6 +25,8 @@ type Props = {
 };
 
 export function MarkdownEditor({ value, disabled, onEdit }: Props) {
+  const [sourceMode, setSourceMode] = useState(false);
+  const preview = useRef(new Compartment());
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
   const props = useRef({ value, disabled, onEdit });
@@ -37,6 +41,7 @@ export function MarkdownEditor({ value, disabled, onEdit }: Props) {
     if (!host.current) return;
     extensions.current = [
       markdown(),
+      preview.current.of(liveMarkdownPreview),
       syntaxHighlighting(markdownHighlighting),
       history(),
       keymap.of([...markdownKeymap, ...defaultKeymap, ...historyKeymap]),
@@ -86,18 +91,32 @@ export function MarkdownEditor({ value, disabled, onEdit }: Props) {
       );
     }
     editor.dispatch({
-      effects: editing.current.reconfigure([
-        EditorState.readOnly.of(disabled),
-        EditorView.editable.of(!disabled),
-        EditorView.contentAttributes.of({
-          "aria-label": "Markdown content",
-          "aria-multiline": "true",
-          "aria-disabled": String(disabled),
-          spellcheck: "false",
-        }),
-      ]),
+      effects: [
+        preview.current.reconfigure(sourceMode ? [] : liveMarkdownPreview),
+        editing.current.reconfigure([
+          EditorState.readOnly.of(disabled),
+          EditorView.editable.of(!disabled),
+          EditorView.contentAttributes.of({
+            "aria-label": "Markdown content",
+            "aria-multiline": "true",
+            "aria-disabled": String(disabled),
+            spellcheck: "false",
+          }),
+        ]),
+      ],
     });
-  }, [value, disabled]);
+  }, [value, disabled, sourceMode]);
 
-  return <div className="markdown-editor" ref={host} />;
+  return (
+    <>
+      <button
+        type="button"
+        aria-pressed={sourceMode}
+        onClick={() => setSourceMode(!sourceMode)}
+      >
+        Source mode
+      </button>
+      <div className="markdown-editor" ref={host} />
+    </>
+  );
 }

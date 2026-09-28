@@ -259,3 +259,32 @@ input {
 .editor-pane form {
   max-width: 560px;
 }
+
+.preview-heading {
+  font-weight: 600;
+}
+.preview-h1 {
+  font-size: 1.7em;
+}
+.preview-h2 {
+  font-size: 1.45em;
+}
+.preview-h3 {
+  font-size: 1.25em;
+}
+.preview-h4,
+.preview-h5,
+.preview-h6 {
+  font-size: 1.1em;
+}
+.preview-code,
+.preview-code-block {
+  background: var(--sidebar);
+}
+.preview-code {
+  border-radius: 3px;
+}
+.preview-link {
+  color: var(--syntax);
+  text-decoration: underline;
+}
