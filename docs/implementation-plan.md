@@ -66,6 +66,14 @@ block-storage format. Search, scheduling, and Google integration follow these st
 The updated layout checkpoint supersedes the earlier Telegram instruction to start
 CodeMirror immediately after the folder-tree PR.
 
+## Scheduling checkpoints
+
+1. Pure date calculation with explicit timezone, validated settings, and tested
+   daylight-saving policies (see [scheduling contract](review-scheduling.md)).
+2. Review settings UI and persistence, including consistency across windows.
+3. Persist schedules once on the first nonempty save; ordinary edits keep them.
+   Calendar delivery and notifications follow the later sections above.
+
 ## Review contract
 
 For each section: implement, review directory structure, consolidate actual

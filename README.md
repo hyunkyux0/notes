@@ -48,6 +48,10 @@ IDs, filename collisions, existing-file preservation, invalid paths/content, and
 atomic saves/conflicts. UI tests use mocked desktop commands to check autosave,
 draft recovery, and failure handling; they do not replace native interaction tests.
 
+The independent [review scheduling core](docs/review-scheduling.md) also has Rust
+tests for calendar-day offsets and daylight-saving transitions. It is not yet
+connected to note saves or the Settings UI.
+
 ## Choose a vault
 
 Use **Open vault** at the top left to choose a folder with the native picker.
