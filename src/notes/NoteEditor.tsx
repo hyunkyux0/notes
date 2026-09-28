@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useRef, useState } from "react";
+import { MarkdownEditor } from "./MarkdownEditor";
 import { type Draft, draftFilenames, draftKey, readDraft } from "./noteDrafts";
 import type { Note } from "./useNotes";
 
@@ -143,10 +144,12 @@ export function NoteEditor({
         localStorage.removeItem(key);
       else localStorage.setItem(key, JSON.stringify(next));
       setDraft(next);
+      return true;
     } catch {
       setError(
         "This edit could not be preserved on this device. Free local storage and retry; the previous draft is retained.",
       );
+      return false;
     }
   }
 
@@ -227,14 +230,10 @@ export function NoteEditor({
               : "Saved"}
       </p>
 
-      <label htmlFor="note-body">Markdown content</label>
-      <textarea
-        id="note-body"
-        className="note-content"
+      <MarkdownEditor
         value={draft.body}
         disabled={reloading || renaming || draftLoadFailed}
-        onChange={(event) => edit(event.target.value)}
-        spellCheck={false}
+        onEdit={edit}
       />
 
       {error && <p role="alert">{error}</p>}

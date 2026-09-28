@@ -68,7 +68,9 @@ repeated titles create separate files. Existing files are never replaced.
 The list includes regular `.md` files in the vault and its visible subfolders (UTF-8, up to 2 MiB),
 plus files with recovery drafts, including deleted files. Use Refresh notes after
 external changes. Symbolic links and hidden folders are skipped; folder depth is
-limited to 32 levels. Rendered previews come later. Existing Markdown
+limited to 32 levels. The CodeMirror editor highlights Markdown syntax, supports undo/redo and list
+continuation, and wraps long lines. Inline live preview, equations, and images come
+later. Tab moves focus out of the editor. Existing Markdown
 without our ID comment keeps its format; editing does not insert an ID into it.
 If a new-file write fails partway through, its incomplete file may remain; the app
 reports this so you can inspect it before retrying.
@@ -119,6 +121,7 @@ detected after the move reports the new location so you can refresh the list.
 
 - `src/`: React interface and styles.
 - `src/App.tsx`: vault selection and workspace layout.
+- `src/notes/MarkdownEditor.tsx`: CodeMirror lifecycle and accepted-edit boundary.
 - `src/notes/NoteEditor.tsx`: editing and autosave lifecycle, kept beside the view.
 - `src/notes/noteDrafts.ts`: recovery storage shared by the editor and note list.
 - `src-tauri/src/notes.rs`: Markdown storage scoped to an open vault directory.

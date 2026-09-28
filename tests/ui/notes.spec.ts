@@ -119,7 +119,7 @@ test("recovers unsaved text after navigation and reload", async ({ page }) => {
   await page.getByRole("button", { name: "Reviews", exact: true }).click();
   await page.reload();
   await page.getByRole("button", { name: "study.md", exact: true }).click();
-  await expect(page.getByLabel("Markdown content")).toHaveValue("# Recover me");
+  await expect(page.getByLabel("Markdown content")).toHaveText("# Recover me");
   await expect
     .poll(() => page.evaluate((key) => localStorage.getItem(key), diskKey))
     .toBe("# Recover me");
@@ -142,10 +142,10 @@ test("conflict retains both versions and reload requires explicit discard", asyn
 
   await page.getByRole("button", { name: "Reload disk version" }).click();
   await page.getByRole("button", { name: "Keep draft" }).click();
-  await expect(page.getByLabel("Markdown content")).toHaveValue("# My draft");
+  await expect(page.getByLabel("Markdown content")).toHaveText("# My draft");
   await page.getByRole("button", { name: "Reload disk version" }).click();
   await page.getByRole("button", { name: "Discard draft and reload" }).click();
-  await expect(page.getByLabel("Markdown content")).toHaveValue(
+  await expect(page.getByLabel("Markdown content")).toHaveText(
     "# External edit",
   );
   expect(
@@ -159,7 +159,7 @@ test("failed save retains draft and retry succeeds", async ({ page }) => {
   await expect(page.getByRole("alert")).toContainText("Save failed");
   await page.reload();
   await page.getByRole("button", { name: "study.md", exact: true }).click();
-  await expect(page.getByLabel("Markdown content")).toHaveValue("# Retained");
+  await expect(page.getByLabel("Markdown content")).toHaveText("# Retained");
   await expect(page.getByRole("alert")).toContainText("Save failed");
   await page.evaluate(() => sessionStorage.removeItem("test:fail"));
   await page.getByRole("button", { name: "Retry save" }).click();
@@ -176,7 +176,7 @@ test("deleted notes still expose their recovery draft after restart", async ({
   });
   await page.reload();
   await page.getByRole("button", { name: "study.md", exact: true }).click();
-  await expect(page.getByLabel("Markdown content")).toHaveValue(
+  await expect(page.getByLabel("Markdown content")).toHaveText(
     "# Keep after deletion",
   );
   await expect(
@@ -208,7 +208,7 @@ test("draft storage failure does not accept an unprotected edit", async ({
   });
   await page.getByLabel("Markdown content").fill("# Unprotected");
   await expect(page.getByRole("alert")).toContainText("could not be preserved");
-  await expect(page.getByLabel("Markdown content")).toHaveValue("# Original\n");
+  await expect(page.getByLabel("Markdown content")).toHaveText("# Original\n");
 });
 
 test("reopening during a save preserves a newer draft", async ({ page }) => {
@@ -219,7 +219,7 @@ test("reopening during a save preserves a newer draft", async ({ page }) => {
   await page.getByRole("button", { name: "Reviews", exact: true }).click();
   await page.getByRole("button", { name: "Notebook", exact: true }).click();
   await page.getByRole("button", { name: "study.md", exact: true }).click();
-  await expect(page.getByLabel("Markdown content")).toHaveValue("# Original\n");
+  await expect(page.getByLabel("Markdown content")).toHaveText("# Original\n");
   await expect(page.getByRole("status")).toHaveText("Saved", {
     timeout: 10000,
   });
@@ -255,7 +255,7 @@ test("rename updates selection and later autosaves use the new filename", async 
   await expect(page.getByRole("status")).toHaveText("Saved");
   await page.reload();
   await page.getByRole("button", { name: "renamed.md", exact: true }).click();
-  await expect(page.getByLabel("Markdown content")).toHaveValue(
+  await expect(page.getByLabel("Markdown content")).toHaveText(
     "# After rename",
   );
 });
@@ -299,7 +299,7 @@ test("collisions and destination drafts prevent renaming without losing the note
   await expect(
     page.getByRole("heading", { name: "study.md", exact: true }),
   ).toBeVisible();
-  await expect(page.getByLabel("Markdown content")).toHaveValue("# Original\n");
+  await expect(page.getByLabel("Markdown content")).toHaveText("# Original\n");
 });
 
 test("moving into a folder updates listing, selection, and subsequent saves", async ({
@@ -323,9 +323,7 @@ test("moving into a folder updates listing, selection, and subsequent saves", as
     .getByRole("button", { name: "Expand folder course/week1", exact: true })
     .click();
   await page.getByRole("button", { name: destination, exact: true }).click();
-  await expect(page.getByLabel("Markdown content")).toHaveValue(
-    "# Nested edit",
-  );
+  await expect(page.getByLabel("Markdown content")).toHaveText("# Nested edit");
 });
 
 test("a draft at the destination path blocks a move", async ({ page }) => {
@@ -389,7 +387,7 @@ test("creates empty folders, navigates a nested tree, and creates a note there",
   await page
     .getByRole("button", { name: "Courses/Week1/new.md", exact: true })
     .click();
-  await expect(page.getByLabel("Markdown content")).toHaveValue("# Lecture\n");
+  await expect(page.getByLabel("Markdown content")).toHaveText("# Lecture\n");
   await page.reload();
   await page
     .getByRole("button", { name: "Expand folder Courses", exact: true })
@@ -417,7 +415,7 @@ test("folder errors retain input and navigating the tree preserves recovery draf
   await page.getByLabel("Markdown content").fill("# Draft before navigation");
   await page.getByRole("button", { name: "Folder Empty", exact: true }).click();
   await page.getByRole("button", { name: "study.md", exact: true }).click();
-  await expect(page.getByLabel("Markdown content")).toHaveValue(
+  await expect(page.getByLabel("Markdown content")).toHaveText(
     "# Draft before navigation",
   );
   expect(
@@ -449,7 +447,7 @@ test("tree exposes a recovery draft after its containing folder disappears", asy
   await page
     .getByRole("button", { name: "Missing/Sub/recover.md", exact: true })
     .click();
-  await expect(page.getByLabel("Markdown content")).toHaveValue(
+  await expect(page.getByLabel("Markdown content")).toHaveText(
     "# Recover nested draft",
   );
   await expect(
@@ -489,7 +487,7 @@ test("sidebar layout resizes and collapses without losing the editor", async ({
   await page.getByLabel("Markdown content").fill("# Layout draft");
   await page.getByRole("button", { name: "Hide sidebar" }).click();
   await expect(sidebar).toBeHidden();
-  await expect(page.getByLabel("Markdown content")).toHaveValue(
+  await expect(page.getByLabel("Markdown content")).toHaveText(
     "# Layout draft",
   );
   await page.getByRole("button", { name: "Show sidebar" }).click();
@@ -512,17 +510,17 @@ test("settings and cancelled or failed vault switches preserve the open draft", 
     .poll(() => page.evaluate((key) => localStorage.getItem(key), diskKey))
     .toBe("# Continue saving");
   await page.getByRole("button", { name: "study.md", exact: true }).click();
-  await expect(page.getByLabel("Markdown content")).toHaveValue(
+  await expect(page.getByLabel("Markdown content")).toHaveText(
     "# Continue saving",
   );
   await page.getByRole("button", { name: "Switch vault: vault" }).click();
-  await expect(page.getByLabel("Markdown content")).toHaveValue(
+  await expect(page.getByLabel("Markdown content")).toHaveText(
     "# Continue saving",
   );
   await page.evaluate(() => sessionStorage.setItem("test:vault-error", "yes"));
   await page.getByRole("button", { name: "Switch vault: vault" }).click();
   await expect(page.getByRole("alert")).toContainText("Vault unavailable");
-  await expect(page.getByLabel("Markdown content")).toHaveValue(
+  await expect(page.getByLabel("Markdown content")).toHaveText(
     "# Continue saving",
   );
 });
@@ -552,7 +550,7 @@ test("switching vaults isolates drafts and returning restores them", async ({
   );
   await page.getByRole("button", { name: "Switch vault: vault" }).click();
   await page.getByRole("button", { name: "study.md", exact: true }).click();
-  await expect(page.getByLabel("Markdown content")).toHaveValue("# Original\n");
+  await expect(page.getByLabel("Markdown content")).toHaveText("# Original\n");
   expect(
     await page.evaluate((key) => localStorage.getItem(key), draftKey),
   ).toContain("First vault draft");
@@ -561,7 +559,94 @@ test("switching vaults isolates drafts and returning restores them", async ({
   );
   await page.getByRole("button", { name: "Switch vault: other" }).click();
   await page.getByRole("button", { name: "study.md", exact: true }).click();
-  await expect(page.getByLabel("Markdown content")).toHaveValue(
+  await expect(page.getByLabel("Markdown content")).toHaveText(
     "# First vault draft",
   );
+});
+
+test("Markdown highlighting and list editing preserve exact saved source", async ({
+  page,
+}) => {
+  const editor = page.getByLabel("Markdown content");
+  const source = "# Heading\n\n**Bold** and *italic*\n\n- first";
+  await editor.fill(source);
+  await expect(
+    editor.locator("span").filter({ hasText: "Bold" }).last(),
+  ).toHaveCSS("font-weight", "700");
+  await expect
+    .poll(() => page.evaluate((key) => localStorage.getItem(key), diskKey))
+    .toBe(source);
+  await editor.press("ControlOrMeta+End");
+  await editor.press("Enter");
+  await page.keyboard.type("second");
+  await expect
+    .poll(() => page.evaluate((key) => localStorage.getItem(key), diskKey))
+    .toBe(`${source}\n- second`);
+});
+
+test("undo and redo survive autosave; disk reload clears previous history", async ({
+  page,
+}) => {
+  const editor = page.getByLabel("Markdown content");
+  await editor.fill("# Start");
+  await expect(page.getByRole("status")).toHaveText("Saved");
+  await editor.press("End");
+  await page.keyboard.type(" changed");
+  await expect(page.getByRole("status")).toHaveText("Saved");
+  await editor.press("ControlOrMeta+z");
+  await expect(editor).toHaveText("# Start");
+  await editor.press("ControlOrMeta+Shift+z");
+  await expect(editor).toHaveText("# Start changed");
+  await expect(page.getByRole("status")).toHaveText("Saved");
+  await page.evaluate(
+    (key) => localStorage.setItem(key, "# External"),
+    diskKey,
+  );
+  await page.getByRole("button", { name: "Reload disk version" }).click();
+  await expect(editor).toHaveText("# External");
+  await editor.press("ControlOrMeta+z");
+  await expect(editor).toHaveText("# External");
+});
+
+test("editor styles use the provided nonce under a restrictive style policy", async ({
+  page,
+}) => {
+  await page.route("http://127.0.0.1:1420/", async (route) => {
+    const response = await route.fetch();
+    const html = (await response.text())
+      .replace(
+        '<style id="editor-style-nonce">',
+        '<style id="editor-style-nonce" nonce="test-editor-nonce">',
+      )
+      .replace(
+        "<head>",
+        '<head><meta property="csp-nonce" nonce="test-editor-nonce">',
+      );
+    await route.fulfill({
+      response,
+      body: html,
+      headers: {
+        ...response.headers(),
+        "Content-Security-Policy": "style-src 'self' 'nonce-test-editor-nonce'",
+      },
+    });
+  });
+  await page.reload();
+  await page.getByRole("button", { name: "study.md", exact: true }).click();
+  const editor = page.getByLabel("Markdown content");
+  await editor.fill("**Bold**");
+  await expect(
+    editor.locator("span").filter({ hasText: "Bold" }).last(),
+  ).toHaveCSS("font-weight", "700");
+  expect(
+    await page.evaluate(() =>
+      [...document.querySelectorAll("style")].some(
+        (style) =>
+          style.nonce === "test-editor-nonce" &&
+          [...(style.sheet?.cssRules ?? [])].some((rule) =>
+            rule.cssText.includes(".cm-editor"),
+          ),
+      ),
+    ),
+  ).toBe(true);
 });
