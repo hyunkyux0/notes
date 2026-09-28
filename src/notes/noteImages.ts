@@ -29,6 +29,9 @@ export class ImageWidget extends WidgetType {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "note-image";
+    button.draggable = true;
+    button.dataset.imageFrom = String(this.from);
+    button.dataset.imageSource = this.source;
     button.textContent = "Loading image…";
     button.setAttribute("aria-label", "Edit image Markdown");
     button.onclick = () => {
@@ -45,6 +48,7 @@ export class ImageWidget extends WidgetType {
           if (!button.isConnected) return;
           const image = document.createElement("img");
           image.alt = "Local attachment";
+          image.draggable = false;
           image.src = data;
           image.onload = () => view.requestMeasure();
           image.onerror = () => {
@@ -68,7 +72,7 @@ export class ImageWidget extends WidgetType {
 
 export async function importImage(
   file: File,
-  context: { vaultPath: string; filename: string },
+  context: { vaultPath: string; filename: string; editToken: string },
 ) {
   if (file.size > 8 * 1024 * 1024)
     throw new Error("Images must be at most 8 MiB.");
@@ -76,6 +80,7 @@ export async function importImage(
   return invoke<string>("import_note_image", {
     vaultPath: context.vaultPath,
     filename: context.filename,
+    editToken: context.editToken,
     bytes: Array.from(new Uint8Array(await file.arrayBuffer())),
   });
 }

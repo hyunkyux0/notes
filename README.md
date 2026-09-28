@@ -171,3 +171,38 @@ within the same folder preserves images. Moving a note containing `.attachments/
 to another folder is blocked until safe reference updates are implemented. This
 conservative check also covers references in code examples. External moves are not
 rewritten automatically. Missing images remain editable Markdown.
+
+### Multiple windows
+
+Use **File → New Window** (**Cmd+N** on macOS) or the **New window** button.
+Each window has its own vault selection, navigation and editor; new windows start
+with the last selected vault. Move windows between macOS desktops using Mission
+Control. Closing one window leaves the others open.
+
+A note is editable in one window at a time. Other windows show its saved Markdown
+in read-only live preview, refreshing every two seconds and when focused. Different
+notes or vaults can be edited simultaneously. Close or navigate away from the owning
+editor, then click **Edit here** in another window to continue; retained drafts
+remain available. Reopening the app restores the last vault, not the previous window
+layout. The folder list refreshes on focus. Existing external-file conflict checks
+still apply. Case/Unicode aliases are conservatively treated as the same note.
+
+### Reviewing a PR in a separate checkout
+
+Run commands from the checkout containing the PR branch. A development app already
+running from another checkout continues to show that checkout's code.
+
+```sh
+# From the PR checkout, with Rust available on PATH:
+npm ci
+npm run desktop:review
+```
+
+This opens **Local Notes — Review** on port 1421, using a separate application
+identifier and vault settings. Choose a test vault in this review app. The normal
+`desktop:dev` command continues to use port 1420. Both front-end URL and server port
+are overridden together; the review windows retain HTML5 image drop support.
+
+Check `git branch --show-current` and `git rev-parse --short HEAD` in the review
+checkout to confirm the revision. In the review app, check for the **New window**
+button and **File → New Window** before testing image drops or macOS Spaces.

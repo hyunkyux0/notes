@@ -1,0 +1,20 @@
+{
+  "productName": "Local Notes Review",
+  "identifier": "io.github.hyunkyux0.notes.review",
+  "build": {
+    "beforeDevCommand": "npm run dev -- --port 1421",
+    "devUrl": "http://127.0.0.1:1421"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Local Notes \u2014 Review",
+        "width": 1100,
+        "height": 760,
+        "minWidth": 600,
+        "minHeight": 480,
+        "dragDropEnabled": false
+      }
+    ]
+  }
+}

@@ -80,6 +80,16 @@ export function App() {
           hidden={!sidebarOpen}
           style={{ width: sidebarWidth }}
         >
+          <button
+            type="button"
+            onClick={() => {
+              void invoke("new_window").catch((reason: unknown) =>
+                setError(String(reason)),
+              );
+            }}
+          >
+            New window
+          </button>
           <div className="vault-control" aria-busy={busy}>
             <button
               type="button"

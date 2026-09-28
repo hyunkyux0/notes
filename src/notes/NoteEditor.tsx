@@ -6,6 +6,13 @@ import type { Note } from "./useNotes";
 
 // Saves outlive an editor remount; a reopened editor waits before saving again.
 const pendingSaves = new Map<string, Promise<Note>>();
+// Serialize local mount/unmount ownership requests, including React's effect replay.
+let editorAccessQueue: Promise<unknown> = Promise.resolve();
+function queueEditorAccess<T>(action: () => Promise<T>): Promise<T> {
+  const result = editorAccessQueue.then(action, action);
+  editorAccessQueue = result.catch(() => {});
+  return result;
+}
 
 function draftFromNote(note: Note): Draft {
   const body = note.id
@@ -16,16 +23,19 @@ function draftFromNote(note: Note): Draft {
   return { expected: note.content, savedBody: body, body };
 }
 
-// Keyed by vault and filename in NotesPanel; each editor owns its draft and save lifecycle.
-export function NoteEditor({
-  note,
-  vaultPath,
-  onRenamed,
-}: {
+type NoteEditorProps = {
   note: Note;
   vaultPath: string;
   onRenamed: (previousFilename: string, renamed: Note) => void;
-}) {
+};
+
+// Keyed by vault and filename in NotesPanel; each editor owns its draft and save lifecycle.
+function EditableNote({
+  note,
+  editToken,
+  vaultPath,
+  onRenamed,
+}: NoteEditorProps & { editToken: string }) {
   const key = draftKey(vaultPath, note.filename);
   const [initial] = useState(() => {
     try {
@@ -93,6 +103,7 @@ export function NoteEditor({
       const request = invoke<Note>("save_note", {
         vaultPath,
         filename: note.filename,
+        editToken,
         expectedContent: submitted.expected,
         body: submitted.body,
       }).then((saved) => {
@@ -135,7 +146,17 @@ export function NoteEditor({
         });
     }, 750);
     return () => window.clearTimeout(timer);
-  }, [draft, dirty, error, saving, reloading, key, note.filename, vaultPath]);
+  }, [
+    draft,
+    dirty,
+    error,
+    saving,
+    reloading,
+    key,
+    note.filename,
+    vaultPath,
+    editToken,
+  ]);
 
   function edit(body: string) {
     const next = { ...draft, body };
@@ -213,6 +234,7 @@ export function NoteEditor({
         vaultPath,
         filename: note.filename,
         newFilename,
+        editToken,
         expectedContent: draft.expected,
       });
       onRenamed(note.filename, renamed);
@@ -238,6 +260,7 @@ export function NoteEditor({
       </p>
 
       <MarkdownEditor
+        editToken={editToken}
         vaultPath={vaultPath}
         filename={note.filename}
         onImportBusy={setImporting}
@@ -316,6 +339,113 @@ export function NoteEditor({
         </p>
         {renameError && <p role="alert">{renameError}</p>}
       </form>
+    </article>
+  );
+}
+
+// Acquire before mounting EditableNote: only that component may read/write the
+// shared recovery draft. Other windows display saved Markdown without autosave.
+export function NoteEditor(props: NoteEditorProps) {
+  const [editToken, setEditToken] = useState("");
+  const [attempt, setAttempt] = useState(0);
+  const [access, setAccess] = useState<"loading" | "edit" | "read">("loading");
+  const [snapshot, setSnapshot] = useState(props.note);
+  const [error, setError] = useState<string | null>(null);
+  const { vaultPath, note } = props;
+  useEffect(() => {
+    let active = true;
+    setAccess("loading");
+    setError(null);
+    // A fresh token makes cleanup from an older mount harmless to this editor.
+    const token = `${crypto.randomUUID()}-${attempt}`;
+    const acquired = queueEditorAccess(() =>
+      invoke<boolean>("acquire_note", {
+        vaultPath,
+        filename: note.filename,
+        token,
+      }),
+    );
+    void acquired
+      .then(async (editable) => {
+        if (!active) return;
+        if (editable) {
+          // Another window may have saved since this note was selected.
+          const fresh = await invoke<Note>("read_note", {
+            vaultPath,
+            filename: note.filename,
+          }).catch(() => note);
+          if (!active) return;
+          setSnapshot(fresh);
+          setEditToken(token);
+        }
+        setAccess(editable ? "edit" : "read");
+      })
+      .catch((reason: unknown) => {
+        if (active) setError(String(reason));
+      });
+    return () => {
+      active = false;
+      // A save acknowledgement may still update shared draft storage. Wait for it
+      // before another editor can take ownership, including during React remounts.
+      void queueEditorAccess(async () => {
+        // Release even after a lost response: ownership may have been granted.
+        await acquired.catch(() => false);
+        await pendingSaves
+          .get(draftKey(vaultPath, note.filename))
+          ?.catch(() => {});
+        await invoke("release_note", { token });
+      }).catch(() => {});
+    };
+  }, [vaultPath, note, attempt]);
+
+  useEffect(() => {
+    if (access !== "read") return;
+    let active = true;
+    const refresh = () => {
+      void invoke<Note>("read_note", { vaultPath, filename: note.filename })
+        .then((fresh) => {
+          if (active) {
+            setSnapshot(fresh);
+            setError(null);
+          }
+        })
+        .catch((reason: unknown) => {
+          if (active) setError(String(reason));
+        });
+    };
+    refresh();
+    const timer = window.setInterval(refresh, 2000);
+    window.addEventListener("focus", refresh);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+      window.removeEventListener("focus", refresh);
+    };
+  }, [access, vaultPath, note.filename]);
+
+  if (access === "edit")
+    return <EditableNote {...props} note={snapshot} editToken={editToken} />;
+  return (
+    <article aria-label="Note reader">
+      <h2>{note.filename}</h2>
+      <p>
+        {access === "loading"
+          ? "Opening note…"
+          : "This note is editable in another window. Showing the saved version."}
+      </p>
+      {error && <p role="alert">{error}</p>}
+      <button type="button" onClick={() => setAttempt((value) => value + 1)}>
+        Edit here
+      </button>
+      <MarkdownEditor
+        value={draftFromNote(snapshot).body}
+        disabled={true}
+        vaultPath={vaultPath}
+        filename={note.filename}
+        editToken=""
+        onEdit={() => false}
+        onImportBusy={() => {}}
+      />
     </article>
   );
 }

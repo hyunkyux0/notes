@@ -53,6 +53,12 @@ Complete these in order, with a focused PR and human review before advancing:
 5. **Images:** show local images inline and support drag-and-drop and paste into
    the editor, saving attachments inside the vault and inserting Markdown references.
    Preserve existing attachments and apply vault path protections.
+6. **Multiple windows (before scheduling):** File → New Window / Cmd+N creates an
+   independent workspace that can be placed on another macOS desktop. Each window
+   selects its own vault and note. One window edits a given note at a time; others
+   can read its saved contents. Preserve shared recovery drafts, protect rename
+   destinations, release editing ownership on navigation/close, and keep other
+   windows open when one closes. Existing file conflict checks still apply.
 
 Use meaningful persistence, navigation, and editing regression tests at each stage.
 This follows Obsidian's Markdown-based model rather than introducing a Notion-style

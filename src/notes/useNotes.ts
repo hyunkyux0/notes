@@ -49,6 +49,24 @@ export function useNotes(vaultPath: string) {
     };
   }, [vaultPath]);
 
+  useEffect(() => {
+    let active = true;
+    const refreshListing = () => {
+      void listVaultContents(vaultPath)
+        .then((listing) => {
+          if (!active) return;
+          setFiles(listing.files);
+          setFolders(listing.folders);
+        })
+        .catch(() => {});
+    };
+    window.addEventListener("focus", refreshListing);
+    return () => {
+      active = false;
+      window.removeEventListener("focus", refreshListing);
+    };
+  }, [vaultPath]);
+
   async function performVaultOperation(
     action: () => Promise<void>,
   ): Promise<boolean> {
