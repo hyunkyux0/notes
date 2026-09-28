@@ -15,7 +15,8 @@
     "tauri": "tauri",
     "desktop:dev": "tauri dev",
     "desktop:build": "tauri build --no-bundle",
-    "test:ui": "playwright test"
+    "test:ui": "playwright test",
+    "desktop:review": "tauri dev --config src-tauri/tauri.review.conf.json"
   },
   "dependencies": {
     "@codemirror/commands": "^6.11.1",

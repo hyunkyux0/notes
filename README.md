@@ -186,3 +186,23 @@ editor, then click **Edit here** in another window to continue; retained drafts
 remain available. Reopening the app restores the last vault, not the previous window
 layout. The folder list refreshes on focus. Existing external-file conflict checks
 still apply. Case/Unicode aliases are conservatively treated as the same note.
+
+### Reviewing a PR in a separate checkout
+
+Run commands from the checkout containing the PR branch. A development app already
+running from another checkout continues to show that checkout's code.
+
+```sh
+# From the PR checkout, with Rust available on PATH:
+npm ci
+npm run desktop:review
+```
+
+This opens **Local Notes — Review** on port 1421, using a separate application
+identifier and vault settings. Choose a test vault in this review app. The normal
+`desktop:dev` command continues to use port 1420. Both front-end URL and server port
+are overridden together; the review windows retain HTML5 image drop support.
+
+Check `git branch --show-current` and `git rev-parse --short HEAD` in the review
+checkout to confirm the revision. In the review app, check for the **New window**
+button and **File → New Window** before testing image drops or macOS Spaces.
