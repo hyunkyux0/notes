@@ -62,8 +62,11 @@ pub async fn read_note(
     vault_path: String,
     filename: String,
 ) -> Result<Note, String> {
+    let database =
+        crate::app_settings::settings_path(window.app_handle())?.with_file_name("reviews.sqlite");
+    let scope = vault_path.clone();
     in_vault(window, vault_path, None, move |dir| {
-        notes::read(&dir, &filename)
+        crate::saved_reviews::read(&dir, &scope, &filename, &database)
     })
     .await
 }
@@ -95,8 +98,19 @@ pub async fn save_note(
         token: edit_token,
         destination: None,
     };
+    let settings = crate::app_settings::settings_path(window.app_handle())?;
+    let scope = vault_path.clone();
     in_vault(window, vault_path, Some(edit), move |dir| {
-        notes::save(&dir, &filename, &expected_content, &body)
+        crate::saved_reviews::save(
+            &dir,
+            &scope,
+            &filename,
+            &expected_content,
+            &body,
+            &settings.with_file_name("reviews.sqlite"),
+            &settings.with_file_name("review-settings.json"),
+            || chrono::DateTime::from(std::time::SystemTime::now()),
+        )
     })
     .await
 }

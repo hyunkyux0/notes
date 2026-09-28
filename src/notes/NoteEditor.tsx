@@ -249,6 +249,7 @@ function EditableNote({
   return (
     <article aria-label="Note editor">
       <h2>{note.filename}</h2>
+      {note.reviewWarning && <p role="alert">{note.reviewWarning}</p>}
       <p role="status">
         {saving
           ? "Saving…"
@@ -428,6 +429,7 @@ export function NoteEditor(props: NoteEditorProps) {
   return (
     <article aria-label="Note reader">
       <h2>{note.filename}</h2>
+      {snapshot.reviewWarning && <p role="alert">{snapshot.reviewWarning}</p>}
       <p>
         {access === "loading"
           ? "Opening note…"

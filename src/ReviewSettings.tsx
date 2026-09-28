@@ -116,8 +116,9 @@ export function ReviewSettings() {
       <h1>Settings</h1>
       <h2>Review reminders</h2>
       <p>
-        These settings apply to all vaults and windows. Scheduling and calendar
-        reminders are not active yet.
+        These settings apply to all vaults and windows. Save them before a
+        note’s first content save to enable local review dates. Existing
+        schedules are unchanged. Calendar reminders are not active yet.
       </p>
       {error && <p role="alert">{error}</p>}
       {changedElsewhere && (

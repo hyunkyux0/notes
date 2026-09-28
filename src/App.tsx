@@ -189,8 +189,9 @@ export function App() {
             <section className="welcome">
               <h1>Reviews</h1>
               <p>
-                Return to your notes after 3, 7, and 30 days. Review scheduling
-                and Google Calendar connection are planned for later milestones.
+                Review dates are stored locally after eligible first saves.
+                Calendar reminders and review tracking will be added in later
+                milestones.
               </p>
             </section>
           )}

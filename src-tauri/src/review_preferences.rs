@@ -14,9 +14,8 @@ pub struct Preferences {
     timezone: String,
 }
 impl Preferences {
-    fn validate(&self) -> Result<(), String> {
+    fn validated(&self) -> Result<ReviewSettings, String> {
         ReviewSettings::new(self.intervals.clone(), &self.alert_time, &self.timezone)
-            .map(|_| ())
             .map_err(str::to_owned)
     }
 }
@@ -47,7 +46,7 @@ fn load(path: &Path) -> Result<Snapshot, String> {
     let saved: Snapshot = serde_json::from_slice(&bytes).map_err(|_| {
         "Saved review settings are damaged. Restore review-settings.json and retry."
     })?;
-    saved.preferences.validate()?;
+    saved.preferences.validated()?;
     if saved.revision.as_deref().is_none_or(str::is_empty) {
         return Err(
             "Saved review settings have no revision. Restore review-settings.json and retry."
@@ -57,12 +56,21 @@ fn load(path: &Path) -> Result<Snapshot, String> {
     Ok(saved)
 }
 
+/// No saved revision means the user has not configured reviews yet.
+pub fn configured(path: &Path) -> Result<Option<ReviewSettings>, String> {
+    let snapshot = load(path)?;
+    if snapshot.revision.is_none() {
+        return Ok(None);
+    }
+    snapshot.preferences.validated().map(Some)
+}
+
 fn save(
     path: &Path,
     preferences: Preferences,
     expected_revision: Option<String>,
 ) -> Result<Snapshot, String> {
-    preferences.validate()?;
+    preferences.validated()?;
     // Serialize comparison and replacement across all app windows.
     let _guard = SETTINGS_WRITE
         .lock()

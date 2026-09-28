@@ -36,8 +36,40 @@ Rust dependencies; future rule updates require a dependency update.
 Run `cargo test --manifest-path src-tauri/Cargo.toml --lib --locked` for just the
 scheduling core. The existing full Rust test command also includes these tests.
 
-This checkpoint does not create schedules in the running app. Later persistence
-integration must record the first nonempty save and the resulting schedule once,
-then reuse them on ordinary edits. Settings changes must not silently reschedule
-existing reviews. The Settings UI now persists preferences using this validation. Note schedule
-persistence, Google Calendar, and notifications remain separate checkpoints.
+## First-save persistence
+
+The desktop save command now records first saves in `reviews.sqlite` beside app
+settings. Records are keyed by canonical vault path and stable note ID, not filename.
+Renames/moves inside the vault therefore preserve the original anchor and dates.
+`confirmed = 1` records are eligible for later delivery; pending records must never
+be delivered. `reviews` contains the immutable calculated dates/intervals/timezone;
+SQL NULL means the first save occurred before settings were configured.
+
+Only a successful non-whitespace content save starts the process. The generated
+title template at creation does not count. The anchor is the timestamp of the
+successful save operation, captured after waiting for the scheduling lock. Each
+attempt's intent is persisted before the Markdown write. The existing hidden ID
+comment gains a `; first-save: UUID` receipt in the same atomic replacement as the
+body. SQLite confirms only that exact receipt. No receipt means an interrupted or
+rejected attempt is discarded on retry with a fresh anchor. A matching receipt
+confirms the original intent on reopening, even if the body has since changed.
+This avoids guessing whether an interrupted write completed from a body hash or
+file modification date. The Markdown body is unchanged by scheduling metadata.
+
+Existing confirmed records are never recalculated during ordinary edits, settings
+changes, or window switches. Edits made before settings are explicitly saved stay
+unscheduled; configuring settings later does not enroll or backdate those notes.
+For older app-created notes without a record, the next successful nonempty save
+is their first observed save, with a current anchor, never an inferred creation date.
+External Markdown without an app note ID stays editable but is not auto-enrolled.
+
+Storage failures before the Markdown replacement leave it untouched. A failure
+confirming an already replaced file returns a save error, retaining the recovery
+draft for idempotent retry. Review-storage failures do not hide readable Markdown.
+If a note carries a receipt but its database record is missing (for example after
+copying a note from another installation), it remains editable and shows a warning;
+no new dates are silently invented. Restore the matching database backup to recover
+the schedule. Back up both Markdown and `reviews.sqlite` for review-history recovery.
+Recovery runs when a note is opened or saved; there is no background delivery yet.
+
+Calendar calls, notifications, review completion, and rescheduling UI remain deferred.
