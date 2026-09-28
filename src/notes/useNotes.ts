@@ -3,7 +3,12 @@ import { useEffect, useRef, useState } from "react";
 
 import { draftFilenames, draftKey, readDraft } from "./noteDrafts";
 
-export type Note = { filename: string; id: string | null; content: string };
+export type Note = {
+  filename: string;
+  id: string | null;
+  content: string;
+  reviewWarning?: string;
+};
 async function listVaultContents(vaultPath: string) {
   const listing = await invoke<{ files: string[]; folders: string[] }>(
     "list_vault_contents",

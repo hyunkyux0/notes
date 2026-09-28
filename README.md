@@ -49,8 +49,8 @@ atomic saves/conflicts. UI tests use mocked desktop commands to check autosave,
 draft recovery, and failure handling; they do not replace native interaction tests.
 
 The independent [review scheduling core](docs/review-scheduling.md) also has Rust
-tests for calendar-day offsets and daylight-saving transitions. Settings now configure review preferences; automatic note scheduling
-is not connected yet.
+tests for calendar-day offsets and daylight-saving transitions. Settings configure review preferences; local schedules are persisted on the first
+nonempty content save after configuration. Calendar delivery is not connected yet.
 
 ## Choose a vault
 
@@ -226,5 +226,13 @@ by the native backend. Invalid input or failed writes leave the saved file intac
 Damaged settings files are reported and preserved for manual restoration; they are
 never silently replaced with defaults. Note content and recovery drafts are separate.
 
-This checkpoint configures preferences only. It does not create note schedules,
-connect Google Calendar, or send notifications.
+Save review settings **before** saving a new note's content to enable its local
+review schedule. First saves before configuration stay unscheduled; settings
+changes never reset existing schedules. Creating only the title template does not
+start reviews. The hidden ID comment gains a first-save receipt; Markdown body
+content remains unchanged. Renaming/moving notes preserves their schedules.
+
+Schedules are stored in `reviews.sqlite` beside settings. See the
+[first-save recovery contract](docs/review-scheduling.md#first-save-persistence)
+for recovery, backup, and imported-note behavior. Calendar delivery and desktop
+notifications are not implemented yet.

@@ -16,6 +16,8 @@ pub struct Note {
     pub filename: String,
     pub id: Option<Uuid>,
     pub content: String,
+    #[serde(rename = "reviewWarning", skip_serializing_if = "Option::is_none")]
+    pub review_warning: Option<String>,
 }
 
 fn valid_component(name: &str) -> bool {
@@ -210,32 +212,59 @@ fn from_content(filename: &str, content: String) -> Note {
         .next()
         .and_then(|line| line.strip_prefix(ID_PREFIX))
         .and_then(|value| value.strip_suffix(" -->"))
-        .and_then(|value| Uuid::parse_str(value).ok());
+        .and_then(|value| Uuid::parse_str(value.split("; first-save: ").next()?).ok());
     Note {
         filename: filename.to_owned(),
         id,
         content,
+        review_warning: None,
     }
+}
+
+// The receipt stays on the hidden ID line, so ordinary Markdown body text is untouched.
+pub fn first_save_receipt(note: &Note) -> Option<&str> {
+    note.content
+        .lines()
+        .next()?
+        .strip_suffix(" -->")?
+        .split_once("; first-save: ")
+        .map(|(_, token)| token)
 }
 
 // Serializes this application's saves and renames; external editors do not share this lock.
 static FILE_OPERATIONS_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 pub fn save(root: &Dir, path: &str, expected: &str, body: &str) -> Result<Note, String> {
+    save_with_receipt(root, path, expected, body, None)
+}
+
+pub fn save_with_receipt(
+    root: &Dir,
+    path: &str,
+    expected: &str,
+    body: &str,
+    receipt: Option<&str>,
+) -> Result<Note, String> {
     let (dir, filename) = note_location(root, path)?;
-    let mut note = save_file(&dir, &filename, expected, body)?;
+    let mut note = save_file(&dir, &filename, expected, body, receipt)?;
     note.filename = path.to_owned();
     Ok(note)
 }
 
-fn save_file(dir: &Dir, filename: &str, expected: &str, body: &str) -> Result<Note, String> {
+fn save_file(
+    dir: &Dir,
+    filename: &str,
+    expected: &str,
+    body: &str,
+    receipt: Option<&str>,
+) -> Result<Note, String> {
     let _guard = FILE_OPERATIONS_LOCK
         .lock()
         .map_err(|_| "Saving is unavailable. Restart the app.")?;
     let original = read_file(dir, filename)?;
     // Build from the client's base, never from a potentially changed disk ID.
     let base = from_content(filename, expected.to_owned());
-    let header = if base.id.is_some() {
+    let mut header = if base.id.is_some() {
         expected
             .split_once('\n')
             .map(|(line, _)| format!("{line}\n"))
@@ -243,6 +272,24 @@ fn save_file(dir: &Dir, filename: &str, expected: &str, body: &str) -> Result<No
     } else {
         String::new()
     };
+    if let Some(token) = receipt {
+        if base.id.is_none() || Uuid::parse_str(token).is_err() {
+            return Err("Invalid first-save receipt.".into());
+        }
+        if let Some(existing) = first_save_receipt(&base) {
+            if existing != token {
+                return Err("Conflict: the note's first-save receipt changed.".into());
+            }
+        } else {
+            header = format!(
+                "{}; first-save: {token} -->\n",
+                header
+                    .trim_end()
+                    .strip_suffix(" -->")
+                    .ok_or("Invalid note ID header.")?
+            );
+        }
+    }
     let content = format!("{header}{body}");
     if content.len() as u64 > MAX_BYTES {
         return Err("Notes can contain at most 2 MiB. Your draft is retained.".into());
@@ -430,6 +477,7 @@ fn create_with_id(dir: &Dir, title: &str, id: Uuid) -> Result<Note, String> {
         filename,
         id: Some(id),
         content,
+        review_warning: None,
     })
 }
 

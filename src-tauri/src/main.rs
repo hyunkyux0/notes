@@ -4,6 +4,7 @@ mod app_settings;
 mod note_commands;
 mod notes;
 mod review_preferences;
+mod saved_reviews;
 mod vault;
 mod vault_commands;
 mod windows;

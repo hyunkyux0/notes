@@ -20,7 +20,15 @@ test.beforeEach(async ({ page }) => {
       invoke: async (command, args = {}) => {
         const content = localStorage.getItem("test:disk") ?? "# Original\n";
         const filename = localStorage.getItem("test:filename") ?? "study.md";
-        const note = { filename, id: null, content };
+        const note = {
+          filename,
+          id: sessionStorage.getItem("test:receipt")
+            ? "12345678-1234-4234-8234-123456789abc"
+            : null,
+          content,
+          reviewWarning:
+            sessionStorage.getItem("test:review-warning") ?? undefined,
+        };
         switch (command) {
           case "import_note_image":
             await new Promise((resolve) =>
@@ -107,10 +115,17 @@ test.beforeEach(async ({ page }) => {
             if (sessionStorage.getItem("test:fail"))
               throw "Save failed; draft retained";
             const disk = localStorage.getItem("test:disk") ?? "# Original\n";
-            if (disk !== args.expectedContent && disk !== args.body)
+            const committed = sessionStorage.getItem("test:receipt")
+              ? `<!-- local-notes-id: 12345678-1234-4234-8234-123456789abc; first-save: 22345678-1234-4234-8234-123456789abc -->\n${args.body}`
+              : args.body;
+            if (disk !== args.expectedContent && disk !== committed)
               throw "Conflict: external edit; draft retained";
-            localStorage.setItem("test:disk", args.body);
-            return { ...note, content: args.body };
+            localStorage.setItem("test:disk", committed);
+            if (sessionStorage.getItem("test:receipt-confirm-fail")) {
+              sessionStorage.removeItem("test:receipt-confirm-fail");
+              throw "Review storage is unavailable; draft retained";
+            }
+            return { ...note, content: committed };
           }
           default:
             throw new Error(`Unexpected command: ${command}`);
@@ -1144,4 +1159,57 @@ test("an edit during an image drag prevents deleting stale source positions", as
     "The note changed during the drag",
   );
   await expect(editor).toHaveText("New content must survive");
+});
+
+test("a first-save receipt survives a failed confirmation and recovery draft retry", async ({
+  page,
+}) => {
+  await page.evaluate(() => {
+    sessionStorage.setItem("test:receipt", "yes");
+    sessionStorage.setItem("test:receipt-confirm-fail", "yes");
+    localStorage.setItem(
+      "test:disk",
+      "<!-- local-notes-id: 12345678-1234-4234-8234-123456789abc -->\n# Original",
+    );
+  });
+  await page.reload();
+  await page.getByRole("button", { name: "study.md", exact: true }).click();
+  const editor = page.getByLabel("Markdown content");
+  await editor.fill("First saved content");
+  await expect(page.getByRole("alert")).toContainText(
+    "Review storage is unavailable",
+  );
+  expect(
+    await page.evaluate((key) => localStorage.getItem(key), draftKey),
+  ).not.toBeNull();
+  await page.reload();
+  await page.getByRole("button", { name: "study.md", exact: true }).click();
+  await expect(editor).toHaveText("First saved content");
+  await expect
+    .poll(() => page.evaluate((key) => localStorage.getItem(key), draftKey))
+    .toBeNull();
+  await expect(editor).not.toContainText("first-save");
+  await editor.fill("Later edit");
+  await expect
+    .poll(() => page.evaluate(() => localStorage.getItem("test:disk")))
+    .toBe(
+      "<!-- local-notes-id: 12345678-1234-4234-8234-123456789abc; first-save: 22345678-1234-4234-8234-123456789abc -->\nLater edit",
+    );
+});
+
+test("review storage warnings do not hide saved note content", async ({
+  page,
+}) => {
+  await page.evaluate(() =>
+    sessionStorage.setItem(
+      "test:review-warning",
+      "Review storage is unavailable.",
+    ),
+  );
+  await page.reload();
+  await page.getByRole("button", { name: "study.md", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText(
+    "Review storage is unavailable",
+  );
+  await expect(page.getByLabel("Markdown content")).toContainText("Original");
 });
