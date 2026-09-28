@@ -10,6 +10,21 @@ Install Node.js 24, a stable Rust toolchain, and the
 [Tauri platform prerequisites](https://v2.tauri.app/start/prerequisites/).
 On macOS, this includes Xcode Command Line Tools. Ensure `cargo` and `rustc` are on PATH.
 
+On macOS/Linux, install Rust using the [official rustup instructions](https://rust-lang.org/tools/install/),
+then open a new terminal or run `. "$HOME/.cargo/env"`. Verify the tools in the
+same terminal you will use for development:
+
+```sh
+cargo --version
+rustc --version
+```
+
+If `cargo` is not found or Tauri fails to run `cargo metadata` with “No such file
+or directory”, Rust is missing or its command directory is not on PATH. If
+`~/.cargo/env` exists, source it as above; otherwise install/repair rustup first.
+For zsh, add `. "$HOME/.cargo/env"` to `~/.zshrc` if new terminals still cannot find
+Cargo. A toolchain directory under `~/.rustup` alone does not establish this setup.
+
 ```sh
 npm ci
 npm run desktop:dev
