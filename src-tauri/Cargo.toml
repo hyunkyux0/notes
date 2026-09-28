@@ -9,6 +9,10 @@ license = "MIT"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+oauth2 = { version = "5", default-features = false, features = ["reqwest-blocking", "rustls-tls"] }
+webbrowser = "1"
+url = "2"
+subtle = "2"
 rusqlite = { version = "0.40", features = ["bundled"] }
 chrono = { version = "0.4", default-features = false, features = ["std"] }
 chrono-tz = "0.10"
@@ -25,3 +29,12 @@ uuid = { version = "1", features = ["v4", "serde"] }
 
 [target.'cfg(any(target_os = "macos", target_os = "linux"))'.dependencies]
 rustix = { version = "1", features = ["fs"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+keyring = { version = "3.6", default-features = false, features = ["apple-native"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+keyring = { version = "3.6", default-features = false, features = ["windows-native"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+keyring = { version = "3.6", default-features = false, features = ["sync-secret-service", "crypto-rust"] }

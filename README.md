@@ -2,7 +2,8 @@
 
 A local-first Markdown notebook with planned Google Calendar review reminders.
 The desktop app remembers a local notes folder, creates Markdown notes, and edits
-them with autosave and conflict recovery. Calendar integration is not implemented yet.
+them with autosave and conflict recovery. Google account connection is available;
+calendar creation and review delivery are not implemented yet.
 
 ## Development
 
@@ -151,6 +152,9 @@ detected after the move reports the new location so you can refresh the list.
 - `src-tauri/src/app_settings.rs`: application settings location shared by commands.
 - `src-tauri/src/vault.rs`: folder validation and atomic settings persistence.
 - `src-tauri/src/vault_commands.rs`: native picker and desktop command boundary.
+- `src/GoogleConnection.tsx`: Google configuration/sign-in controls in Settings.
+- `src-tauri/src/google_connection.rs`: OS credentials and serialized connection actions.
+- `src-tauri/src/google_oauth.rs`: browser authorization, protected callback, token exchange.
 - `docs/implementation-plan.md`: approved scope and review checkpoints.
 
 Markdown files will remain the source of truth for note content; SQLite will hold
@@ -236,3 +240,10 @@ Schedules are stored in `reviews.sqlite` beside settings. See the
 [first-save recovery contract](docs/review-scheduling.md#first-save-persistence)
 for recovery, backup, and imported-note behavior. Calendar delivery and desktop
 notifications are not implemented yet.
+
+## Google account connection
+
+Settings supports importing your own Google Desktop OAuth client JSON, browser
+sign-in, cancellation, and disconnection. Credentials stay in the OS credential
+store. Follow [Google connection setup and verification](docs/google-connection.md).
+This prepares account access only; it does not create calendars or events.

@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { GoogleConnection } from "./GoogleConnection";
 
 type Preferences = { intervals: number[]; alertTime: string; timezone: string };
 type Snapshot = { preferences: Preferences; revision: string | null };
@@ -114,6 +115,7 @@ export function ReviewSettings() {
   return (
     <section className="welcome review-settings">
       <h1>Settings</h1>
+      <GoogleConnection />
       <h2>Review reminders</h2>
       <p>
         These settings apply to all vaults and windows. Save them before a

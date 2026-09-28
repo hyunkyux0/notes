@@ -17,6 +17,8 @@ test("review settings persist, recover from errors, and protect edits across win
       command: string,
       args: typeof saved & { expectedRevision: string | null },
     ) => {
+      if (command === "get_google_connection")
+        return { configured: false, connected: false, connecting: false };
       if (command === "get_vault") return null;
       if (command === "get_review_settings") {
         if (loadDelay)

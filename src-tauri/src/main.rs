@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod app_settings;
+mod google_connection;
 mod note_commands;
 mod notes;
 mod review_preferences;
@@ -57,6 +58,11 @@ fn main() {
         })
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
+            google_connection::get_google_connection,
+            google_connection::import_google_client,
+            google_connection::connect_google,
+            google_connection::cancel_google_sign_in,
+            google_connection::disconnect_google,
             review_preferences::get_review_settings,
             review_preferences::save_review_settings,
             windows::new_window,
