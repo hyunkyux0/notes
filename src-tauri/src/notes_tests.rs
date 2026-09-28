@@ -29,10 +29,14 @@ fn create_unique_notes_and_keep_ids_after_rename() {
 #[test]
 fn collision_never_overwrites_existing_content() {
     let (root, dir) = fixture();
-    let id = Uuid::new_v4();
-    let note = create_with_id(&dir, "Same title", id).unwrap();
+    let note = create(&dir, "", "Same title").unwrap();
     fs::write(root.path().join(&note.filename), "edited outside app").unwrap();
-    assert!(create_with_id(&dir, "Same title", id).is_err());
+    let second = create(&dir, "", "Same title").unwrap();
+    let third = create(&dir, "", "Same title").unwrap();
+    assert_eq!(note.filename, "Same title.md");
+    assert_eq!(second.filename, "Same title (2).md");
+    assert_eq!(third.filename, "Same title (3).md");
+    assert_ne!(note.id, second.id);
     assert_eq!(
         read(&dir, &note.filename).unwrap().content,
         "edited outside app"
@@ -478,4 +482,69 @@ fn folder_depth_limit_keeps_created_folders_listable() {
     let listing = list(&dir).unwrap();
     assert_eq!(listing.folders.len(), 32);
     assert_eq!(listing.files, [note.filename]);
+}
+
+#[test]
+fn readable_filenames_preserve_titles_and_fit_destination_limits() {
+    let (_root, dir) = fixture();
+    for (title, expected) in [
+        ("Test 1", "Test 1.md"),
+        ("Ideas α 学習", "Ideas α 学習.md"),
+        ("../A:B/C\\D?", "-A-B-C-D-.md"),
+        ("...", "Note.md"),
+        ("CON", "_CON.md"),
+        ("LPT1.notes", "_LPT1.notes.md"),
+        (" .Hidden. ", "Hidden.md"),
+    ] {
+        let note = create(&dir, "", title).unwrap();
+        assert_eq!(note.filename, expected);
+        assert!(note.content.ends_with(&format!("# {}\n", title.trim())));
+        assert_eq!(read(&dir, expected).unwrap().id, note.id);
+    }
+    let long = create(&dir, "", &"学".repeat(120)).unwrap();
+    assert!(valid_destination_component(&long.filename));
+    assert!(long.filename.len() <= 200);
+}
+
+#[test]
+fn occupied_directory_and_symlink_names_are_skipped() {
+    let (root, dir) = fixture();
+    let outside = tempfile::tempdir().unwrap();
+    let target = outside.path().join("untouched.md");
+    fs::write(&target, "outside content").unwrap();
+    fs::create_dir(root.path().join("Study.md")).unwrap();
+    std::os::unix::fs::symlink(&target, root.path().join("Study (2).md")).unwrap();
+    let note = create(&dir, "", "Study").unwrap();
+    assert_eq!(note.filename, "Study (3).md");
+    assert_eq!(fs::read_to_string(target).unwrap(), "outside content");
+}
+
+#[test]
+fn simultaneous_creates_keep_every_note() {
+    let (root, _dir) = fixture();
+    let notes = std::thread::scope(|scope| {
+        let tasks: Vec<_> = (0..8)
+            .map(|_| {
+                let path = root.path();
+                scope.spawn(move || {
+                    let dir = Dir::open_ambient_dir(path, ambient_authority()).unwrap();
+                    create(&dir, "", "Study").unwrap()
+                })
+            })
+            .collect();
+        tasks
+            .into_iter()
+            .map(|task| task.join().unwrap())
+            .collect::<Vec<_>>()
+    });
+    let names: std::collections::HashSet<_> = notes.iter().map(|note| &note.filename).collect();
+    let ids: std::collections::HashSet<_> = notes.iter().map(|note| note.id).collect();
+    assert_eq!(names.len(), 8);
+    assert_eq!(ids.len(), 8);
+    for note in notes {
+        assert_eq!(
+            fs::read_to_string(root.path().join(note.filename)).unwrap(),
+            note.content
+        );
+    }
 }

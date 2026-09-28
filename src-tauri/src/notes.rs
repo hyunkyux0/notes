@@ -391,24 +391,29 @@ fn create_with_id(dir: &Dir, title: &str, id: Uuid) -> Result<Note, String> {
     if title.is_empty() || title.chars().count() > 120 || title.chars().any(char::is_control) {
         return Err("Enter a title of 1–120 characters on one line.".into());
     }
-    let slug: String = title
-        .chars()
-        .take(48)
-        .map(|c| {
-            if c.is_ascii_alphanumeric() {
-                c.to_ascii_lowercase()
-            } else {
-                '-'
-            }
-        })
-        .collect();
-    let slug = slug.trim_matches('-');
-    let filename = format!("{}-{id}.md", if slug.is_empty() { "note" } else { slug });
+    let stem = readable_filename_stem(title);
     let content = format!("{ID_PREFIX}{id} -->\n\n# {title}\n");
-    // Exclusive creation never replaces an existing file, even on an ID collision.
-    let mut file = dir
-        .open_with(&filename, OpenOptions::new().write(true).create_new(true))
-        .map_err(|_| "The note could not be created; existing files were preserved.")?;
+    // Exclusive creation handles concurrent requests and occupied paths (including
+    // symlinks) without following or replacing them. Never use an exists-then-write check.
+    let mut number = 1_u32;
+    let (filename, mut file) = loop {
+        let filename = if number == 1 {
+            format!("{stem}.md")
+        } else {
+            format!("{stem} ({number}).md")
+        };
+        match dir.open_with(&filename, OpenOptions::new().write(true).create_new(true)) {
+            Ok(file) => break (filename, file),
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+                number = number
+                    .checked_add(1)
+                    .ok_or("No available filename for this title.")?;
+            }
+            Err(_) => {
+                return Err("The note could not be created; existing files were preserved.".into())
+            }
+        }
+    };
     file.write_all(content.as_bytes())
         .and_then(|_| file.sync_all())
         .map_err(|_| "The new note could not be fully saved. Check the folder before retrying.")?;
@@ -417,6 +422,48 @@ fn create_with_id(dir: &Dir, title: &str, id: Uuid) -> Result<Note, String> {
         id: Some(id),
         content,
     })
+}
+
+// Keep the title recognizable on common filesystems. Leave room within the
+// 200-byte destination limit for a numeric suffix and the Markdown extension.
+fn readable_filename_stem(title: &str) -> String {
+    let mut stem = String::new();
+    for character in title.chars() {
+        let character = if r#"/\:<>"|?*"#.contains(character) {
+            '-'
+        } else {
+            character
+        };
+        if stem.len() + character.len_utf8() > 180 {
+            break;
+        }
+        stem.push(character);
+    }
+    let stem = stem.trim_matches(|c: char| c == '.' || c.is_whitespace());
+    if stem.is_empty() {
+        return "Note".into();
+    }
+    // Windows device names stay reserved even when followed by an extension.
+    let base = stem
+        .split('.')
+        .next()
+        .unwrap_or(stem)
+        .trim_end()
+        .to_ascii_uppercase();
+    let reserved = matches!(base.as_str(), "CON" | "PRN" | "AUX" | "NUL")
+        || ["COM", "LPT"].iter().any(|prefix| {
+            base.strip_prefix(prefix).is_some_and(|suffix| {
+                matches!(
+                    suffix,
+                    "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "¹" | "²" | "³"
+                )
+            })
+        });
+    if reserved {
+        format!("_{stem}")
+    } else {
+        stem.into()
+    }
 }
 
 #[cfg(test)]
