@@ -8,6 +8,7 @@ import {
 } from "@codemirror/view";
 
 import { EquationWidget } from "./equations";
+import { ImageWidget, imageReference } from "./noteImages";
 
 class BulletMarker extends WidgetType {
   toDOM() {
@@ -55,7 +56,17 @@ function previewDecorations(state: EditorState): DecorationSet {
         return false;
       }
       if (name === "UnclosedMath") return false;
-      if (name === "Image") return false; // Attachments have a separate checkpoint.
+      if (name === "Image") {
+        const source = state.sliceDoc(from, to);
+        const reference = imageReference(source);
+        if (reference && !active(from, to))
+          decorations.push(
+            Decoration.replace({
+              widget: new ImageWidget(source, reference, from),
+            }).range(from, to),
+          );
+        return false;
+      }
       const parent = node.node.parent;
       const region = parent ?? node.node;
       const editing = active(region.from, region.to);

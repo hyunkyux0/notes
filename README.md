@@ -84,7 +84,7 @@ or enabling Source mode exposes the original LaTeX. Invalid or oversized express
 remain visible as source with an edit tooltip. Inline delimiters cannot have inner
 edge whitespace; escape currency dollar signs with `\$`. Code and unmatched math
 remain literal. Display math in nested lists/quotes and other delimiter styles are
-not yet supported. Images come later. Tab moves focus out of the editor. Existing Markdown
+not yet supported. Tab moves focus out of the editor. Existing Markdown
 without our ID comment keeps its format; editing does not insert an ID into it.
 If a new-file write fails partway through, its incomplete file may remain; the app
 reports this so you can inspect it before retrying.
@@ -135,6 +135,8 @@ detected after the move reports the new location so you can refresh the list.
 
 - `src/`: React interface and styles.
 - `src/App.tsx`: vault selection and workspace layout.
+- `src-tauri/src/note_images.rs`: bounded raster validation, storage and safe preview.
+- `src/notes/noteImages.ts`: attachment transfer and editable image widgets.
 - `src/notes/equations.ts`: math syntax and bounded, untrusted KaTeX rendering.
 - `src/notes/liveMarkdownPreview.ts`: syntax-tree decorations; no stored-text changes.
 - `src/notes/MarkdownEditor.tsx`: CodeMirror lifecycle and accepted-edit boundary.
@@ -152,3 +154,20 @@ search and review state. Add feature modules when those features are implemented
 Personal vaults and credentials must live outside this repository.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for review conventions. Licensed under MIT.
+
+### Local images
+
+Drop or paste one PNG, JPEG, GIF, or WebP file into the editor (up to 8 MiB and
+4096 pixels per dimension). The original bytes are saved in a hidden `.attachments`
+folder beside the note; Markdown contains a relative reference. Live preview shows
+a static image up to 1600 pixels per dimension, including the first frame of animated
+images. Click it or switch to Source mode to edit the Markdown. Remote images,
+SVG/HTML, reference-style images, and arbitrary existing image paths remain literal.
+
+The editor pauses input during import. Undo removes the Markdown insertion but keeps
+the attachment so redo and recovery drafts remain valid. Interrupted imports or
+failed saves can leave unused attachments; automatic cleanup is deferred. Renaming
+within the same folder preserves images. Moving a note containing `.attachments/`
+to another folder is blocked until safe reference updates are implemented. This
+conservative check also covers references in code examples. External moves are not
+rewritten automatically. Missing images remain editable Markdown.

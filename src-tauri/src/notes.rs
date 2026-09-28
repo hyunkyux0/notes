@@ -4,6 +4,9 @@ use serde::Serialize;
 use std::io::{Read, Write};
 use uuid::Uuid;
 
+#[path = "note_images.rs"]
+pub mod images;
+
 const MAX_BYTES: u64 = 2 * 1024 * 1024;
 const ID_PREFIX: &str = "<!-- local-notes-id: ";
 
@@ -349,6 +352,12 @@ pub fn rename(
     original.filename = filename.to_owned();
     if original.content != expected {
         return Err("Conflict: the file changed externally. Reload it before renaming.".into());
+    }
+    if filename.rsplit_once('/').map(|(folder, _)| folder)
+        != new_filename.rsplit_once('/').map(|(folder, _)| folder)
+        && original.content.contains(".attachments/")
+    {
+        return Err("Moving notes with local attachments is not supported yet. Rename within the same folder to preserve image references.".into());
     }
     if filename == new_filename {
         return Ok(original);
