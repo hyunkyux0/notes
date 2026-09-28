@@ -86,5 +86,25 @@ export function useNotes(vaultPath: string) {
     });
   }
 
-  return { files, note, busy, error, createNote, openNote, refreshNotes };
+  function acceptRenamedNote(previousFilename: string, renamed: Note) {
+    setFiles((current) =>
+      current
+        .map((name) => (name === previousFilename ? renamed.filename : name))
+        .sort(),
+    );
+    setNote((current) =>
+      current?.filename === previousFilename ? renamed : current,
+    );
+  }
+
+  return {
+    files,
+    note,
+    busy,
+    error,
+    createNote,
+    openNote,
+    refreshNotes,
+    acceptRenamedNote,
+  };
 }

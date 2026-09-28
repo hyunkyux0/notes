@@ -60,3 +60,17 @@ pub async fn save_note(
     })
     .await
 }
+
+#[tauri::command]
+pub async fn rename_note(
+    app: AppHandle,
+    vault_path: String,
+    filename: String,
+    new_filename: String,
+    expected_content: String,
+) -> Result<Note, String> {
+    in_vault(app, vault_path, move |dir| {
+        notes::rename(&dir, &filename, &new_filename, &expected_content)
+    })
+    .await
+}

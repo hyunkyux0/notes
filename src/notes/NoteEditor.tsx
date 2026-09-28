@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useRef, useState } from "react";
-import { type Draft, draftKey, readDraft } from "./noteDrafts";
+import { type Draft, draftFilenames, draftKey, readDraft } from "./noteDrafts";
 import type { Note } from "./useNotes";
 
 // Saves outlive an editor remount; a reopened editor waits before saving again.
@@ -19,9 +19,11 @@ function draftFromNote(note: Note): Draft {
 export function NoteEditor({
   note,
   vaultPath,
+  onRenamed,
 }: {
   note: Note;
   vaultPath: string;
+  onRenamed: (previousFilename: string, renamed: Note) => void;
 }) {
   const key = draftKey(vaultPath, note.filename);
   const [initial] = useState(() => {
@@ -54,6 +56,9 @@ export function NoteEditor({
   const [saving, setSaving] = useState(() => pendingSaves.has(key));
   const [confirmReload, setConfirmReload] = useState(false);
   const [reloading, setReloading] = useState(false);
+  const [newFilename, setNewFilename] = useState(note.filename);
+  const [renaming, setRenaming] = useState(false);
+  const [renameError, setRenameError] = useState<string | null>(null);
   const requestInFlight = useRef(false);
   const dirty = draft.body !== draft.savedBody;
 
@@ -157,6 +162,7 @@ export function NoteEditor({
       localStorage.removeItem(key);
       setDraft(draftFromNote(fresh));
       setDraftLoadFailed(false);
+      setRenameError(null);
       setError(null);
     } catch (reason) {
       setError(String(reason));
@@ -165,15 +171,90 @@ export function NoteEditor({
     }
   }
 
+  async function renameNote() {
+    if (requestInFlight.current) return;
+    if (
+      dirty ||
+      saving ||
+      reloading ||
+      renaming ||
+      error ||
+      pendingSaves.has(key)
+    )
+      return;
+    requestInFlight.current = true;
+    setRenaming(true);
+    setRenameError(null);
+    try {
+      // Refuse both source and destination drafts: neither can safely change identity here.
+      const normalizeName = (name: string) =>
+        name.normalize("NFC").toLowerCase();
+      const protectedNames = [note.filename, newFilename].map(normalizeName);
+      if (
+        draftFilenames(vaultPath).some((name) =>
+          protectedNames.includes(normalizeName(name)),
+        )
+      ) {
+        throw new Error(
+          "Save or discard recovery drafts for both filenames before renaming.",
+        );
+      }
+      const renamed = await invoke<Note>("rename_note", {
+        vaultPath,
+        filename: note.filename,
+        newFilename,
+        expectedContent: draft.expected,
+      });
+      onRenamed(note.filename, renamed);
+    } catch (reason) {
+      setRenameError(String(reason));
+    } finally {
+      requestInFlight.current = false;
+      setRenaming(false);
+    }
+  }
+
   return (
     <article aria-label="Note editor">
       <h2>{note.filename}</h2>
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          void renameNote();
+        }}
+      >
+        <label htmlFor="rename-note">Filename (including .md)</label>
+        <input
+          id="rename-note"
+          value={newFilename}
+          disabled={renaming}
+          onChange={(event) => setNewFilename(event.target.value)}
+          required
+        />
+        <button
+          type="submit"
+          disabled={
+            dirty ||
+            saving ||
+            reloading ||
+            renaming ||
+            !!error ||
+            newFilename === note.filename
+          }
+        >
+          Rename note
+        </button>
+        <p className="vault-hint">
+          Save or discard pending changes before renaming.
+        </p>
+        {renameError && <p role="alert">{renameError}</p>}
+      </form>
       <label htmlFor="note-body">Markdown content</label>
       <textarea
         id="note-body"
         className="note-content"
         value={draft.body}
-        disabled={reloading || draftLoadFailed}
+        disabled={reloading || renaming || draftLoadFailed}
         onChange={(event) => edit(event.target.value)}
         spellCheck={false}
       />
@@ -190,7 +271,7 @@ export function NoteEditor({
       {error && (
         <button
           type="button"
-          disabled={saving || reloading || draftLoadFailed}
+          disabled={saving || reloading || renaming || draftLoadFailed}
           onClick={() => setError(null)}
         >
           Retry save
@@ -198,7 +279,7 @@ export function NoteEditor({
       )}
       <button
         type="button"
-        disabled={saving || reloading}
+        disabled={saving || reloading || renaming}
         onClick={() =>
           dirty || error ? setConfirmReload(true) : void reloadDiskVersion()
         }
@@ -212,7 +293,7 @@ export function NoteEditor({
           </p>
           <button
             type="button"
-            disabled={saving || reloading}
+            disabled={saving || reloading || renaming}
             onClick={() => void reloadDiskVersion()}
           >
             Discard draft and reload

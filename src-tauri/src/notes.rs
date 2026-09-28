@@ -92,11 +92,11 @@ fn from_content(filename: &str, content: String) -> Note {
     }
 }
 
-// Serializes this application's saves; external editors do not share this lock.
-static SAVE_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+// Serializes this application's saves and renames; external editors do not share this lock.
+static FILE_OPERATIONS_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 pub fn save(dir: &Dir, filename: &str, expected: &str, body: &str) -> Result<Note, String> {
-    let _guard = SAVE_LOCK
+    let _guard = FILE_OPERATIONS_LOCK
         .lock()
         .map_err(|_| "Saving is unavailable. Restart the app.")?;
     let original = read(dir, filename)?;
@@ -193,6 +193,54 @@ fn replace_checked(
     }
     let _ = dir.remove_file(temporary);
     Ok(())
+}
+
+/// Rename within the vault without replacing any existing directory entry.
+pub fn rename(
+    dir: &Dir,
+    filename: &str,
+    new_filename: &str,
+    expected: &str,
+) -> Result<Note, String> {
+    let _guard = FILE_OPERATIONS_LOCK
+        .lock()
+        .map_err(|_| "Renaming is unavailable. Restart the app.")?;
+    if !valid_filename(new_filename)
+        || new_filename.len() > 200
+        || new_filename.starts_with('.')
+        || new_filename.trim() != new_filename
+        || new_filename
+            .chars()
+            .any(|c| c.is_control() || "<>\"|?*".contains(c))
+    {
+        return Err("Enter a visible Markdown filename up to 200 bytes, without path separators or special characters.".into());
+    }
+    let original = read(dir, filename)?;
+    if original.content != expected {
+        return Err("Conflict: the file changed externally. Reload it before renaming.".into());
+    }
+    if filename == new_filename {
+        return Ok(original);
+    }
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    let moved = rustix::fs::renameat_with(
+        dir,
+        filename,
+        dir,
+        new_filename,
+        rustix::fs::RenameFlags::NOREPLACE,
+    )
+    .is_ok();
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    let moved = false;
+    if !moved {
+        return Err("Rename failed: the destination may already exist, the source disappeared, or safe renaming is unsupported. Refresh the notes list.".into());
+    }
+    // An external writer does not share our lock. Keep its bytes and report the new location.
+    match read(dir, new_filename) {
+        Ok(note) if note.content == expected => Ok(note),
+        _ => Err(format!("The file moved to {new_filename}, but changed externally or became unreadable. Refresh the list; no file contents were rewritten.")),
+    }
 }
 
 pub fn create(dir: &Dir, title: &str) -> Result<Note, String> {

@@ -221,3 +221,91 @@ fn competing_app_saves_cannot_overwrite_each_other() {
     });
     assert_eq!(dir.entries().unwrap().count(), 1);
 }
+
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[test]
+fn renaming_keeps_content_identity_and_permissions() {
+    use std::os::unix::fs::PermissionsExt;
+    let (root, dir) = fixture();
+    let original = create(&dir, "Study").unwrap();
+    let old_path = root.path().join(&original.filename);
+    fs::set_permissions(&old_path, fs::Permissions::from_mode(0o640)).unwrap();
+    let renamed = rename(&dir, &original.filename, "New name.md", &original.content).unwrap();
+    assert_eq!(renamed.id, original.id);
+    assert_eq!(renamed.content, original.content);
+    assert!(!old_path.exists());
+    assert_eq!(
+        fs::metadata(root.path().join("New name.md"))
+            .unwrap()
+            .permissions()
+            .mode()
+            & 0o777,
+        0o640
+    );
+    assert_eq!(list(&dir).unwrap(), ["New name.md"]);
+    assert_eq!(
+        rename(&dir, "New name.md", "New name.md", &renamed.content)
+            .unwrap()
+            .content,
+        renamed.content
+    );
+}
+
+#[test]
+fn rename_rejects_collisions_and_changed_or_missing_sources() {
+    let (root, dir) = fixture();
+    fs::write(root.path().join("first.md"), "original").unwrap();
+    fs::write(root.path().join("second.md"), "keep this").unwrap();
+    assert!(rename(&dir, "first.md", "second.md", "original").is_err());
+    assert_eq!(read(&dir, "first.md").unwrap().content, "original");
+    assert_eq!(read(&dir, "second.md").unwrap().content, "keep this");
+    fs::write(root.path().join("first.md"), "external").unwrap();
+    assert!(rename(&dir, "first.md", "new.md", "original").is_err());
+    assert_eq!(read(&dir, "first.md").unwrap().content, "external");
+    assert!(rename(&dir, "missing.md", "new.md", "").is_err());
+    assert!(!root.path().join("new.md").exists());
+}
+
+#[test]
+fn rename_rejects_unsafe_names_without_moving_source() {
+    let (_root, dir) = fixture();
+    let original = create(&dir, "Study").unwrap();
+    for name in [
+        "../out.md",
+        "/tmp/out.md",
+        "folder/note.md",
+        "folder\\note.md",
+        "bad:name.md",
+        "bad?.md",
+        "line\nbreak.md",
+        ".hidden.md",
+        "note.txt",
+        " spaced.md",
+        &format!("{}.md", "a".repeat(201)),
+    ] {
+        assert!(
+            rename(&dir, &original.filename, name, &original.content).is_err(),
+            "{name}"
+        );
+    }
+    assert_eq!(
+        read(&dir, &original.filename).unwrap().content,
+        original.content
+    );
+    assert_eq!(dir.entries().unwrap().count(), 1);
+}
+
+#[cfg(unix)]
+#[test]
+fn rename_does_not_follow_source_or_destination_links() {
+    let (root, dir) = fixture();
+    let outside = tempfile::tempdir().unwrap();
+    let target = outside.path().join("outside.md");
+    fs::write(&target, "outside").unwrap();
+    std::os::unix::fs::symlink(&target, root.path().join("link.md")).unwrap();
+    fs::write(root.path().join("note.md"), "local").unwrap();
+    assert!(rename(&dir, "link.md", "new.md", "outside").is_err());
+    assert!(rename(&dir, "note.md", "link.md", "local").is_err());
+    assert_eq!(fs::read_to_string(target).unwrap(), "outside");
+    assert_eq!(read(&dir, "note.md").unwrap().content, "local");
+}
