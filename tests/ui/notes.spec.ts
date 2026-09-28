@@ -24,8 +24,33 @@ test.beforeEach(async ({ page }) => {
         switch (command) {
           case "get_vault":
             return { path: "/test/vault" };
-          case "list_notes":
-            return sessionStorage.getItem("test:missing") ? [] : [filename];
+          case "list_vault_contents":
+            return {
+              files: sessionStorage.getItem("test:missing") ? [] : [filename],
+              folders: JSON.parse(localStorage.getItem("test:folders") ?? "[]"),
+            };
+          case "create_folder": {
+            const folders: string[] = JSON.parse(
+              localStorage.getItem("test:folders") ?? "[]",
+            );
+            const path = args.parent
+              ? `${args.parent}/${args.name}`
+              : args.name;
+            if (folders.includes(path) || args.name.includes("/"))
+              throw "Folder already exists or invalid name";
+            localStorage.setItem(
+              "test:folders",
+              JSON.stringify([...folders, path]),
+            );
+            return path;
+          }
+          case "create_note": {
+            const filename = `${args.folder ? `${args.folder}/` : ""}new.md`;
+            const content = `# ${args.title}\n`;
+            localStorage.setItem("test:filename", filename);
+            localStorage.setItem("test:disk", content);
+            return { filename, id: null, content };
+          }
           case "read_note":
             if (sessionStorage.getItem("test:missing")) throw "File missing";
             return note;
@@ -283,6 +308,12 @@ test("moving into a folder updates listing, selection, and subsequent saves", as
   await page.getByLabel("Markdown content").fill("# Nested edit");
   await expect(page.getByRole("status")).toHaveText("Saved");
   await page.reload();
+  await page
+    .getByRole("button", { name: "Folder course", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Folder course/week1", exact: true })
+    .click();
   await page.getByRole("button", { name: destination, exact: true }).click();
   await expect(page.getByLabel("Markdown content")).toHaveValue(
     "# Nested edit",
@@ -305,5 +336,107 @@ test("a draft at the destination path blocks a move", async ({ page }) => {
   await expect(page.getByRole("alert")).toContainText("recovery drafts");
   await expect(
     page.getByRole("heading", { name: "study.md", exact: true }),
+  ).toBeVisible();
+});
+
+test("creates empty folders, navigates a nested tree, and creates a note there", async ({
+  page,
+}) => {
+  await page.getByLabel("New folder name").fill("Courses");
+  await page
+    .getByRole("button", { name: "Create folder", exact: true })
+    .click();
+  const courses = page.getByRole("button", {
+    name: "Folder Courses",
+    exact: true,
+  });
+  await expect(courses).toHaveAttribute("aria-expanded", "false");
+  await courses.click();
+  await page.getByLabel("New folder name").fill("Week1");
+  await page
+    .getByRole("button", { name: "Create folder", exact: true })
+    .click();
+  const week = page.getByRole("button", {
+    name: "Folder Courses/Week1",
+    exact: true,
+  });
+  await week.click();
+  await page.getByLabel("New note title").fill("Lecture");
+  await page.getByRole("button", { name: "Create note", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Courses/Week1/new.md", exact: true }),
+  ).toBeVisible();
+  await courses.click();
+  await expect(week).toBeHidden();
+  await courses.click();
+  await page
+    .getByRole("button", { name: "Courses/Week1/new.md", exact: true })
+    .click();
+  await expect(page.getByLabel("Markdown content")).toHaveValue("# Lecture\n");
+  await page.reload();
+  await page
+    .getByRole("button", { name: "Folder Courses", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Folder Courses/Week1", exact: true }),
+  ).toBeVisible();
+});
+
+test("folder errors retain input and navigating the tree preserves recovery drafts", async ({
+  page,
+}) => {
+  await page.getByLabel("New folder name").fill("Empty");
+  await page
+    .getByRole("button", { name: "Create folder", exact: true })
+    .click();
+  await page.getByLabel("New folder name").fill("Empty");
+  await page
+    .getByRole("button", { name: "Create folder", exact: true })
+    .click();
+  await expect(page.getByRole("alert")).toContainText("already exists");
+  await expect(page.getByLabel("New folder name")).toHaveValue("Empty");
+  await page.evaluate(() => sessionStorage.setItem("test:fail", "yes"));
+  await page.getByLabel("Markdown content").fill("# Draft before navigation");
+  await page.getByRole("button", { name: "Folder Empty", exact: true }).click();
+  await page.getByRole("button", { name: "study.md", exact: true }).click();
+  await expect(page.getByLabel("Markdown content")).toHaveValue(
+    "# Draft before navigation",
+  );
+  expect(
+    await page.evaluate((key) => localStorage.getItem(key), draftKey),
+  ).toContain("Draft before navigation");
+});
+
+test("tree exposes a recovery draft after its containing folder disappears", async ({
+  page,
+}) => {
+  await page.evaluate(() => {
+    sessionStorage.setItem("test:missing", "yes");
+    localStorage.setItem(
+      'notes:draft:["/test/vault","Missing/Sub/recover.md"]',
+      JSON.stringify({
+        expected: "# Original",
+        savedBody: "# Original",
+        body: "# Recover nested draft",
+      }),
+    );
+  });
+  await page.reload();
+  await page
+    .getByRole("button", { name: "Folder Missing", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Folder Missing/Sub", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Missing/Sub/recover.md", exact: true })
+    .click();
+  await expect(page.getByLabel("Markdown content")).toHaveValue(
+    "# Recover nested draft",
+  );
+  await expect(
+    page.getByText(
+      "The disk file is unavailable. Showing its recovery draft so you can copy it.",
+    ),
   ).toBeVisible();
 });

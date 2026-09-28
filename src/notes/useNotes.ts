@@ -4,13 +4,22 @@ import { useEffect, useRef, useState } from "react";
 import { draftFilenames, draftKey, readDraft } from "./noteDrafts";
 
 export type Note = { filename: string; id: string | null; content: string };
-async function listNotes(vaultPath: string) {
-  const diskFiles = await invoke<string[]>("list_notes", { vaultPath });
-  return [...new Set([...diskFiles, ...draftFilenames(vaultPath)])].sort();
+async function listVaultContents(vaultPath: string) {
+  const listing = await invoke<{ files: string[]; folders: string[] }>(
+    "list_vault_contents",
+    { vaultPath },
+  );
+  return {
+    ...listing,
+    files: [
+      ...new Set([...listing.files, ...draftFilenames(vaultPath)]),
+    ].sort(),
+  };
 }
 
 // VaultPanel keys this feature by vault path, giving each vault isolated state.
 export function useNotes(vaultPath: string) {
+  const [folders, setFolders] = useState<string[]>([]);
   const [files, setFiles] = useState<string[]>([]);
   const [note, setNote] = useState<Note | null>(null);
   const [busy, setBusy] = useState(true);
@@ -19,9 +28,12 @@ export function useNotes(vaultPath: string) {
 
   useEffect(() => {
     let active = true;
-    listNotes(vaultPath)
+    listVaultContents(vaultPath)
       .then((names) => {
-        if (active) setFiles(names);
+        if (active) {
+          setFiles(names.files);
+          setFolders(names.folders);
+        }
       })
       .catch((reason: unknown) => {
         if (active) setError(String(reason));
@@ -37,7 +49,9 @@ export function useNotes(vaultPath: string) {
     };
   }, [vaultPath]);
 
-  async function run(action: () => Promise<void>): Promise<boolean> {
+  async function performVaultOperation(
+    action: () => Promise<void>,
+  ): Promise<boolean> {
     // A ref closes the gap before React renders disabled controls.
     if (pending.current) return false;
     pending.current = true;
@@ -55,16 +69,31 @@ export function useNotes(vaultPath: string) {
     }
   }
 
-  function createNote(title: string) {
-    return run(async () => {
-      const created = await invoke<Note>("create_note", { vaultPath, title });
+  function createNote(title: string, folder: string) {
+    return performVaultOperation(async () => {
+      const created = await invoke<Note>("create_note", {
+        vaultPath,
+        title,
+        folder,
+      });
       setFiles((current) => [...current, created.filename].sort());
       setNote(created);
     });
   }
 
+  function createFolder(parent: string, name: string) {
+    return performVaultOperation(async () => {
+      const path = await invoke<string>("create_folder", {
+        vaultPath,
+        parent,
+        name,
+      });
+      setFolders((current) => [...new Set([...current, path])].sort());
+    });
+  }
+
   function openNote(filename: string) {
-    return run(async () => {
+    return performVaultOperation(async () => {
       setNote(null);
       try {
         setNote(await invoke<Note>("read_note", { vaultPath, filename }));
@@ -80,9 +109,11 @@ export function useNotes(vaultPath: string) {
   }
 
   function refreshNotes() {
-    return run(async () => {
+    return performVaultOperation(async () => {
       setNote(null);
-      setFiles(await listNotes(vaultPath));
+      const listing = await listVaultContents(vaultPath);
+      setFiles(listing.files);
+      setFolders(listing.folders);
     });
   }
 
@@ -98,6 +129,8 @@ export function useNotes(vaultPath: string) {
   }
 
   return {
+    folders,
+    createFolder,
     files,
     note,
     busy,

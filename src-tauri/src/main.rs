@@ -10,11 +10,12 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
-            note_commands::list_notes,
+            note_commands::list_vault_contents,
             note_commands::read_note,
             note_commands::save_note,
             note_commands::rename_note,
             note_commands::create_note,
+            note_commands::create_folder,
             vault_commands::get_vault,
             vault_commands::choose_vault,
         ])

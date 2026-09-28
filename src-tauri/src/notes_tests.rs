@@ -11,8 +11,8 @@ fn fixture() -> (tempfile::TempDir, Dir) {
 #[test]
 fn create_unique_notes_and_keep_ids_after_rename() {
     let (root, dir) = fixture();
-    let first = create(&dir, "../Ideas: α / study").unwrap();
-    let second = create(&dir, "../Ideas: α / study").unwrap();
+    let first = create(&dir, "", "../Ideas: α / study").unwrap();
+    let second = create(&dir, "", "../Ideas: α / study").unwrap();
     assert_ne!(first.id, second.id);
     assert_ne!(first.filename, second.filename);
     assert!(valid_filename(&first.filename));
@@ -23,7 +23,7 @@ fn create_unique_notes_and_keep_ids_after_rename() {
     )
     .unwrap();
     assert_eq!(read(&dir, "renamed.md").unwrap().id, first.id);
-    assert_eq!(list(&dir).unwrap().len(), 2);
+    assert_eq!(list(&dir).unwrap().files.len(), 2);
 }
 
 #[test]
@@ -46,11 +46,11 @@ fn existing_markdown_is_listed_and_read_without_rewriting() {
     fs::write(root.path().join("Existing.MD"), bytes).unwrap();
     fs::write(root.path().join("image.png"), [0, 1]).unwrap();
     fs::create_dir(root.path().join("folder.md")).unwrap();
-    assert_eq!(list(&dir).unwrap(), ["Existing.MD"]);
+    assert_eq!(list(&dir).unwrap().files, ["Existing.MD"]);
     let note = read(&dir, "Existing.MD").unwrap();
     assert_eq!(note.id, None);
     assert_eq!(note.content, bytes);
-    create(&dir, "Existing").unwrap();
+    create(&dir, "", "Existing").unwrap();
     assert_eq!(
         fs::read_to_string(root.path().join("Existing.MD")).unwrap(),
         bytes
@@ -78,9 +78,9 @@ fn reject_paths_outside_vault_and_non_markdown() {
 fn invalid_titles_do_not_create_files() {
     let (_root, dir) = fixture();
     for title in ["", "  ", "first\nsecond", &"a".repeat(121)] {
-        assert!(create(&dir, title).is_err());
+        assert!(create(&dir, "", title).is_err());
     }
-    assert!(list(&dir).unwrap().is_empty());
+    assert!(list(&dir).unwrap().files.is_empty());
 }
 
 #[test]
@@ -104,7 +104,7 @@ fn links_cannot_expose_external_notes() {
     let secret = outside.path().join("secret.md");
     fs::write(&secret, "private").unwrap();
     std::os::unix::fs::symlink(&secret, root.path().join("link.md")).unwrap();
-    assert!(list(&dir).unwrap().is_empty());
+    assert!(list(&dir).unwrap().files.is_empty());
     assert!(read(&dir, "link.md").is_err());
     // The directory handle also rejects escapes independently of our preflight check.
     assert!(dir.open("link.md").is_err());
@@ -114,7 +114,7 @@ fn links_cannot_expose_external_notes() {
 #[test]
 fn save_preserves_id_and_supports_response_loss_retry() {
     let (_root, dir) = fixture();
-    let original = create(&dir, "Study").unwrap();
+    let original = create(&dir, "", "Study").unwrap();
     let saved = save(&dir, &original.filename, &original.content, "# Edited\n").unwrap();
     assert_eq!(saved.id, original.id);
     assert!(saved.content.ends_with("# Edited\n"));
@@ -131,7 +131,7 @@ fn save_preserves_id_and_supports_response_loss_retry() {
 #[test]
 fn stale_save_and_deleted_file_keep_external_state() {
     let (root, dir) = fixture();
-    let note = create(&dir, "Study").unwrap();
+    let note = create(&dir, "", "Study").unwrap();
     fs::write(root.path().join(&note.filename), "external edit").unwrap();
     assert!(save(&dir, &note.filename, &note.content, "my draft").is_err());
     assert_eq!(
@@ -188,7 +188,7 @@ fn legacy_content_and_file_permissions_survive_save() {
 #[test]
 fn failed_save_does_not_leave_temporary_files_or_change_content() {
     let (root, dir) = fixture();
-    let note = create(&dir, "Study").unwrap();
+    let note = create(&dir, "", "Study").unwrap();
     let path = root.path().join(&note.filename);
     let mut permissions = fs::metadata(&path).unwrap().permissions();
     permissions.set_readonly(true);
@@ -210,7 +210,7 @@ fn failed_save_does_not_leave_temporary_files_or_change_content() {
 #[test]
 fn competing_app_saves_cannot_overwrite_each_other() {
     let (_root, dir) = fixture();
-    let original = create(&dir, "Study").unwrap();
+    let original = create(&dir, "", "Study").unwrap();
     std::thread::scope(|scope| {
         let first = scope.spawn(|| save(&dir, &original.filename, &original.content, "first"));
         let second = scope.spawn(|| save(&dir, &original.filename, &original.content, "second"));
@@ -227,7 +227,7 @@ fn competing_app_saves_cannot_overwrite_each_other() {
 fn renaming_keeps_content_identity_and_permissions() {
     use std::os::unix::fs::PermissionsExt;
     let (root, dir) = fixture();
-    let original = create(&dir, "Study").unwrap();
+    let original = create(&dir, "", "Study").unwrap();
     let old_path = root.path().join(&original.filename);
     fs::set_permissions(&old_path, fs::Permissions::from_mode(0o640)).unwrap();
     let renamed = rename(&dir, &original.filename, "New name.md", &original.content).unwrap();
@@ -242,7 +242,7 @@ fn renaming_keeps_content_identity_and_permissions() {
             & 0o777,
         0o640
     );
-    assert_eq!(list(&dir).unwrap(), ["New name.md"]);
+    assert_eq!(list(&dir).unwrap().files, ["New name.md"]);
     assert_eq!(
         rename(&dir, "New name.md", "New name.md", &renamed.content)
             .unwrap()
@@ -269,7 +269,7 @@ fn rename_rejects_collisions_and_changed_or_missing_sources() {
 #[test]
 fn rename_rejects_unsafe_names_without_moving_source() {
     let (_root, dir) = fixture();
-    let original = create(&dir, "Study").unwrap();
+    let original = create(&dir, "", "Study").unwrap();
     for name in [
         "../out.md",
         "/tmp/out.md",
@@ -315,13 +315,13 @@ fn rename_does_not_follow_source_or_destination_links() {
 fn moved_notes_are_listed_read_saved_and_moved_back() {
     let (root, dir) = fixture();
     fs::create_dir_all(root.path().join("archive/week1")).unwrap();
-    let original = create(&dir, "Study").unwrap();
+    let original = create(&dir, "", "Study").unwrap();
     let path = "archive/week1/study.md";
     let moved = rename(&dir, &original.filename, path, &original.content).unwrap();
     assert_eq!(moved.filename, path);
     assert_eq!(moved.id, original.id);
     assert_eq!(moved.content, original.content);
-    assert_eq!(list(&dir).unwrap(), [path]);
+    assert_eq!(list(&dir).unwrap().files, [path]);
     assert_eq!(read(&dir, path).unwrap().content, original.content);
     let saved = save(&dir, path, &moved.content, "# Edited after move").unwrap();
     assert_eq!(saved.filename, path);
@@ -335,7 +335,7 @@ fn moved_notes_are_listed_read_saved_and_moved_back() {
     let returned = rename(&dir, path, "returned.md", &saved.content).unwrap();
     assert_eq!(returned.content, saved.content);
     assert_eq!(returned.id, original.id);
-    assert_eq!(list(&dir).unwrap(), ["returned.md"]);
+    assert_eq!(list(&dir).unwrap().files, ["returned.md"]);
 }
 
 #[test]
@@ -372,7 +372,7 @@ fn directory_links_are_excluded_and_rejected_for_all_note_operations() {
     fs::write(root.path().join("real/local.md"), "inside").unwrap();
     std::os::unix::fs::symlink(outside.path(), root.path().join("escape")).unwrap();
     std::os::unix::fs::symlink("real", root.path().join("alias")).unwrap();
-    assert_eq!(list(&dir).unwrap(), ["real/local.md"]);
+    assert_eq!(list(&dir).unwrap().files, ["real/local.md"]);
     for path in ["escape/secret.md", "alias/local.md"] {
         assert!(read(&dir, path).is_err());
         assert!(save(&dir, path, "outside", "draft").is_err());
@@ -401,11 +401,81 @@ fn nested_listing_skips_hidden_folders_and_non_markdown() {
         fs::write(root.path().join(name), "text").unwrap();
     }
     assert_eq!(
-        list(&dir).unwrap(),
+        list(&dir).unwrap().files,
         ["folder/b.md", "folder/deeper/a.MD", "root.md"]
     );
     assert_eq!(
         read(&dir, "folder/deeper/a.MD").unwrap().filename,
         "folder/deeper/a.MD"
     );
+}
+
+#[test]
+fn create_folders_and_notes_in_selected_folder() {
+    let (_root, dir) = fixture();
+    assert_eq!(create_folder(&dir, "", "Courses").unwrap(), "Courses");
+    assert_eq!(
+        create_folder(&dir, "Courses", "Empty").unwrap(),
+        "Courses/Empty"
+    );
+    let listing = list(&dir).unwrap();
+    assert_eq!(listing.folders, ["Courses", "Courses/Empty"]);
+    assert!(listing.files.is_empty());
+    let note = create(&dir, "Courses/Empty", "New study").unwrap();
+    assert!(note.filename.starts_with("Courses/Empty/"));
+    let opened = read(&dir, &note.filename).unwrap();
+    assert_eq!(opened.id, note.id);
+    assert_eq!(opened.content, note.content);
+    assert_eq!(list(&dir).unwrap().files, [note.filename]);
+}
+
+#[test]
+fn folder_creation_rejects_collisions_and_invalid_paths() {
+    let (_root, dir) = fixture();
+    create_folder(&dir, "", "Existing").unwrap();
+    dir.write("file", "preserve me").unwrap();
+    for name in [
+        "Existing", "file", "", ".", "..", "a/b", "a\\b", "/tmp", ".hidden", " space", "a:b", "a?b",
+    ] {
+        assert!(create_folder(&dir, "", name).is_err(), "{name}");
+    }
+    for parent in [
+        "../outside",
+        "/tmp",
+        "missing",
+        "Existing/../Existing",
+        "Existing//child",
+    ] {
+        assert!(create_folder(&dir, parent, "child").is_err(), "{parent}");
+        assert!(create(&dir, parent, "note").is_err(), "{parent}");
+    }
+    assert_eq!(dir.read_to_string("file").unwrap(), "preserve me");
+    assert_eq!(list(&dir).unwrap().folders, ["Existing"]);
+}
+
+#[cfg(unix)]
+#[test]
+fn folder_creation_and_note_creation_reject_symlink_parents() {
+    let (root, dir) = fixture();
+    let outside = tempfile::tempdir().unwrap();
+    std::os::unix::fs::symlink(outside.path(), root.path().join("linked")).unwrap();
+    assert!(create_folder(&dir, "linked", "child").is_err());
+    assert!(create(&dir, "linked", "note").is_err());
+    assert!(create_folder(&dir, "", "linked").is_err());
+    assert_eq!(fs::read_dir(outside.path()).unwrap().count(), 0);
+    assert!(list(&dir).unwrap().folders.is_empty());
+}
+
+#[test]
+fn folder_depth_limit_keeps_created_folders_listable() {
+    let (_root, dir) = fixture();
+    let mut path = String::new();
+    for _ in 0..32 {
+        path = create_folder(&dir, &path, "child").unwrap();
+    }
+    assert!(create_folder(&dir, &path, "too-deep").is_err());
+    let note = create(&dir, &path, "Deep note").unwrap();
+    let listing = list(&dir).unwrap();
+    assert_eq!(listing.folders.len(), 32);
+    assert_eq!(listing.files, [note.filename]);
 }

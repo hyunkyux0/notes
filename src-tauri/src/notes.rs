@@ -57,17 +57,72 @@ fn note_location(root: &Dir, path: &str) -> Result<(Dir, String), String> {
     if !valid_filename(filename) {
         return Err("Choose a Markdown file inside the vault.".into());
     }
+    let folder = parts[..parts.len() - 1].join("/");
+    Ok((folder_location(root, &folder)?, (*filename).to_owned()))
+}
+
+// Empty path denotes the vault root; all other paths use explicit safe components.
+fn folder_location(root: &Dir, path: &str) -> Result<Dir, String> {
     let mut dir = root
         .try_clone()
         .map_err(|_| "The vault could not be opened.")?;
-    for part in &parts[..parts.len() - 1] {
+    if path.is_empty() {
+        return Ok(dir);
+    }
+    let parts: Vec<_> = path.split('/').collect();
+    if parts.len() > 32
+        || parts
+            .iter()
+            .any(|part| !valid_component(part) || part.starts_with('.'))
+    {
+        return Err(
+            "Choose a visible relative folder path inside the vault (up to 32 folders).".into(),
+        );
+    }
+    for part in parts {
         dir = open_folder(&dir, part)?;
     }
-    Ok((dir, (*filename).to_owned()))
+    Ok(dir)
 }
 
-pub fn list(dir: &Dir) -> Result<Vec<String>, String> {
-    fn visit(dir: &Dir, prefix: &str, depth: usize, names: &mut Vec<String>) -> Result<(), String> {
+fn valid_destination_component(name: &str) -> bool {
+    valid_component(name)
+        && name.len() <= 200
+        && !name.starts_with('.')
+        && name.trim() == name
+        && !name.chars().any(|c| "<>\"|?*".contains(c))
+}
+
+pub fn create_folder(root: &Dir, parent: &str, name: &str) -> Result<String, String> {
+    if !valid_destination_component(name) || (!parent.is_empty() && parent.split('/').count() >= 32)
+    {
+        return Err("Use a visible folder name up to 200 bytes, without separators or special characters (up to 32 folders deep).".into());
+    }
+    let dir = folder_location(root, parent)?;
+    // create_dir, unlike create_dir_all, fails on existing entries and never follows them.
+    dir.create_dir(name).map_err(|_| {
+        "The folder could not be created. An entry may already exist; refresh and try again."
+    })?;
+    Ok(if parent.is_empty() {
+        name.to_owned()
+    } else {
+        format!("{parent}/{name}")
+    })
+}
+
+#[derive(Debug, Serialize, Default)]
+pub struct VaultListing {
+    pub files: Vec<String>,
+    pub folders: Vec<String>,
+}
+
+pub fn list(dir: &Dir) -> Result<VaultListing, String> {
+    fn visit(
+        dir: &Dir,
+        prefix: &str,
+        depth: usize,
+        listing: &mut VaultListing,
+    ) -> Result<(), String> {
         if depth > 32 {
             return Err("The vault exceeds the supported depth of 32 folders.".into());
         }
@@ -87,22 +142,24 @@ pub fn list(dir: &Dir) -> Result<Vec<String>, String> {
                 .map_err(|_| "A file type could not be read.")?;
             let path = format!("{prefix}{name}");
             if kind.is_dir() && !name.starts_with('.') {
+                listing.folders.push(path.clone());
                 visit(
                     &open_folder(dir, &name)?,
                     &format!("{path}/"),
                     depth + 1,
-                    names,
+                    listing,
                 )?;
             } else if kind.is_file() && valid_filename(&name) {
-                names.push(path);
+                listing.files.push(path);
             }
         }
         Ok(())
     }
-    let mut names = Vec::new();
-    visit(dir, "", 0, &mut names)?;
-    names.sort();
-    Ok(names)
+    let mut listing = VaultListing::default();
+    visit(dir, "", 0, &mut listing)?;
+    listing.files.sort();
+    listing.folders.sort();
+    Ok(listing)
 }
 
 pub fn read(root: &Dir, path: &str) -> Result<Note, String> {
@@ -280,12 +337,10 @@ pub fn rename(
         .map_err(|_| "Renaming is unavailable. Restart the app.")?;
     let (source_dir, source_name) = note_location(dir, filename)?;
     let (destination_dir, destination_name) = note_location(dir, new_filename)?;
-    if new_filename.split('/').any(|part| {
-        part.len() > 200
-            || part.starts_with('.')
-            || part.trim() != part
-            || part.chars().any(|c| "<>\"|?*".contains(c))
-    }) {
+    if new_filename
+        .split('/')
+        .any(|part| !valid_destination_component(part))
+    {
         return Err(
             "Use visible path components up to 200 bytes, without special characters.".into(),
         );
@@ -322,8 +377,13 @@ pub fn rename(
     }
 }
 
-pub fn create(dir: &Dir, title: &str) -> Result<Note, String> {
-    create_with_id(dir, title, Uuid::new_v4())
+pub fn create(root: &Dir, folder: &str, title: &str) -> Result<Note, String> {
+    let dir = folder_location(root, folder)?;
+    let mut note = create_with_id(&dir, title, Uuid::new_v4())?;
+    if !folder.is_empty() {
+        note.filename = format!("{folder}/{}", note.filename);
+    }
+    Ok(note)
 }
 
 fn create_with_id(dir: &Dir, title: &str, id: Uuid) -> Result<Note, String> {

@@ -7,7 +7,9 @@ review history and sync state. Use CodeMirror 6 and KaTeX, with local attachment
 ## Sections
 
 1. Repository foundation and CI.
-2. Local vault, notes, stable IDs, safe autosave, rename/move, external edit handling.
+2. Local vault, notes, stable IDs, safe autosave, rename/move, external edit handling,
+   folder creation, and an expandable folder/file tree for navigation. Show empty
+   folders, open notes from the tree, and create notes in the selected folder.
 3. Markdown editor, equations, drag/drop and paste images, then live preview.
 4. Review scheduler: 3, 7, 30 calendar days after first nonempty save; configurable
    intervals, alert time and timezone. Ordinary edits do not reset the schedule.
