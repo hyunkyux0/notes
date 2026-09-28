@@ -14,5 +14,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - run: npm ci
       - run: npm run check
+      - run: npx playwright install chromium
+      - run: npm run test:ui
       - run: npm run desktop:build
       - run: cargo test --release --locked --manifest-path src-tauri/Cargo.toml

@@ -75,17 +75,124 @@ pub fn read(dir: &Dir, filename: &str) -> Result<Note, String> {
     if content.len() as u64 > MAX_BYTES {
         return Err("This preview supports notes up to 2 MiB.".into());
     }
+    Ok(from_content(filename, content))
+}
+
+fn from_content(filename: &str, content: String) -> Note {
     let id = content
         .lines()
         .next()
         .and_then(|line| line.strip_prefix(ID_PREFIX))
         .and_then(|value| value.strip_suffix(" -->"))
         .and_then(|value| Uuid::parse_str(value).ok());
-    Ok(Note {
+    Note {
         filename: filename.to_owned(),
         id,
         content,
-    })
+    }
+}
+
+// Serializes this application's saves; external editors do not share this lock.
+static SAVE_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+pub fn save(dir: &Dir, filename: &str, expected: &str, body: &str) -> Result<Note, String> {
+    let _guard = SAVE_LOCK
+        .lock()
+        .map_err(|_| "Saving is unavailable. Restart the app.")?;
+    let original = read(dir, filename)?;
+    // Build from the client's base, never from a potentially changed disk ID.
+    let base = from_content(filename, expected.to_owned());
+    let header = if base.id.is_some() {
+        expected
+            .split_once('\n')
+            .map(|(line, _)| format!("{line}\n"))
+            .unwrap_or_else(|| format!("{expected}\n"))
+    } else {
+        String::new()
+    };
+    let content = format!("{header}{body}");
+    if content.len() as u64 > MAX_BYTES {
+        return Err("Notes can contain at most 2 MiB. Your draft is retained.".into());
+    }
+    // A previous save may have completed just before a restart lost its response.
+    if original.content == content {
+        return Ok(original);
+    }
+    if original.content != expected {
+        return Err(
+            "Conflict: the file changed outside this editor. Your draft is retained.".into(),
+        );
+    }
+    let temporary = format!(".notes-save-{}.tmp", Uuid::new_v4());
+    let mut file = dir
+        .open_with(&temporary, OpenOptions::new().write(true).create_new(true))
+        .map_err(|_| "A temporary save file could not be created. Your draft is retained.")?;
+    let result = (|| {
+        let permissions = dir
+            .metadata(filename)
+            .map_err(|_| "The note is unavailable.")?
+            .permissions();
+        if permissions.readonly() {
+            return Err("The note is read-only. Your draft is retained.");
+        }
+        file.set_permissions(permissions)
+            .map_err(|_| "File permissions could not be preserved.")?;
+        file.write_all(content.as_bytes())
+            .and_then(|_| file.sync_all())
+            .map_err(|_| "The draft could not be written. The original file is unchanged.")?;
+        if read(dir, filename)
+            .map_err(|_| "The note became unavailable; your draft is retained.")?
+            .content
+            != expected
+        {
+            return Err("Conflict: the file changed during saving. Your draft is retained.");
+        }
+        Ok(())
+    })();
+    if result.is_err() {
+        let _ = dir.remove_file(&temporary);
+    }
+    result.map_err(str::to_owned)?;
+    replace_checked(dir, filename, &temporary, expected)?;
+    Ok(from_content(filename, content))
+}
+
+fn replace_checked(
+    dir: &Dir,
+    filename: &str,
+    temporary: &str,
+    expected: &str,
+) -> Result<(), String> {
+    // An atomic exchange keeps the displaced file available for a post-swap check.
+    // A plain check-then-rename could silently discard an intervening external edit.
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    let swapped = rustix::fs::renameat_with(
+        dir,
+        temporary,
+        dir,
+        filename,
+        rustix::fs::RenameFlags::EXCHANGE,
+    )
+    .is_ok();
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    let swapped = false;
+    if !swapped {
+        let _ = dir.remove_file(temporary);
+        return Err(
+            "Safe file replacement is unavailable. The original and your draft are unchanged."
+                .into(),
+        );
+    }
+    let mut displaced = String::new();
+    let checked = dir
+        .open(temporary)
+        .and_then(|file| file.take(MAX_BYTES + 1).read_to_string(&mut displaced));
+    if checked.is_err() || displaced != expected {
+        // Never clean up a displaced file that we cannot prove was the expected version.
+        return Err(format!("Conflict during replacement: your draft is in the note; the displaced external version is retained as {temporary} in the vault. Inspect both before continuing."));
+    }
+    let _ = dir.remove_file(temporary);
+    Ok(())
 }
 
 pub fn create(dir: &Dir, title: &str) -> Result<Note, String> {

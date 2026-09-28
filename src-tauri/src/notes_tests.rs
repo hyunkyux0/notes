@@ -109,3 +109,115 @@ fn links_cannot_expose_external_notes() {
     // The directory handle also rejects escapes independently of our preflight check.
     assert!(dir.open("link.md").is_err());
 }
+
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[test]
+fn save_preserves_id_and_supports_response_loss_retry() {
+    let (_root, dir) = fixture();
+    let original = create(&dir, "Study").unwrap();
+    let saved = save(&dir, &original.filename, &original.content, "# Edited\n").unwrap();
+    assert_eq!(saved.id, original.id);
+    assert!(saved.content.ends_with("# Edited\n"));
+    assert_eq!(read(&dir, &saved.filename).unwrap().content, saved.content);
+    assert_eq!(
+        save(&dir, &original.filename, &original.content, "# Edited\n")
+            .unwrap()
+            .content,
+        saved.content
+    );
+    assert_eq!(dir.entries().unwrap().count(), 1);
+}
+
+#[test]
+fn stale_save_and_deleted_file_keep_external_state() {
+    let (root, dir) = fixture();
+    let note = create(&dir, "Study").unwrap();
+    fs::write(root.path().join(&note.filename), "external edit").unwrap();
+    assert!(save(&dir, &note.filename, &note.content, "my draft").is_err());
+    assert_eq!(
+        fs::read_to_string(root.path().join(&note.filename)).unwrap(),
+        "external edit"
+    );
+    fs::remove_file(root.path().join(&note.filename)).unwrap();
+    assert!(save(&dir, &note.filename, &note.content, "my draft").is_err());
+    assert_eq!(dir.entries().unwrap().count(), 0);
+}
+
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[test]
+fn racing_external_replacement_is_retained_for_recovery() {
+    let (root, dir) = fixture();
+    fs::write(root.path().join("note.md"), "external edit after preflight").unwrap();
+    fs::write(root.path().join("staged.tmp"), "my draft").unwrap();
+    let error = replace_checked(&dir, "note.md", "staged.tmp", "old content").unwrap_err();
+    assert!(error.contains("staged.tmp"));
+    assert_eq!(
+        fs::read_to_string(root.path().join("note.md")).unwrap(),
+        "my draft"
+    );
+    assert_eq!(
+        fs::read_to_string(root.path().join("staged.tmp")).unwrap(),
+        "external edit after preflight"
+    );
+}
+
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[test]
+fn legacy_content_and_file_permissions_survive_save() {
+    use std::os::unix::fs::PermissionsExt;
+    let (root, dir) = fixture();
+    let path = root.path().join("legacy.md");
+    fs::write(&path, "---\ntitle: Legacy\n---\nold").unwrap();
+    fs::set_permissions(&path, fs::Permissions::from_mode(0o640)).unwrap();
+    let original = read(&dir, "legacy.md").unwrap();
+    let saved = save(
+        &dir,
+        "legacy.md",
+        &original.content,
+        "---\ntitle: Legacy\n---\nnew",
+    )
+    .unwrap();
+    assert_eq!(saved.id, None);
+    assert_eq!(saved.content, "---\ntitle: Legacy\n---\nnew");
+    assert_eq!(
+        fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+        0o640
+    );
+}
+
+#[test]
+fn failed_save_does_not_leave_temporary_files_or_change_content() {
+    let (root, dir) = fixture();
+    let note = create(&dir, "Study").unwrap();
+    let path = root.path().join(&note.filename);
+    let mut permissions = fs::metadata(&path).unwrap().permissions();
+    permissions.set_readonly(true);
+    fs::set_permissions(&path, permissions).unwrap();
+    assert!(save(&dir, &note.filename, &note.content, "draft").is_err());
+    assert_eq!(read(&dir, &note.filename).unwrap().content, note.content);
+    assert_eq!(dir.entries().unwrap().count(), 1);
+    assert!(save(&dir, "../outside.md", "", "draft").is_err());
+    assert!(save(
+        &dir,
+        &note.filename,
+        &note.content,
+        &"x".repeat(MAX_BYTES as usize + 1)
+    )
+    .is_err());
+}
+
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[test]
+fn competing_app_saves_cannot_overwrite_each_other() {
+    let (_root, dir) = fixture();
+    let original = create(&dir, "Study").unwrap();
+    std::thread::scope(|scope| {
+        let first = scope.spawn(|| save(&dir, &original.filename, &original.content, "first"));
+        let second = scope.spawn(|| save(&dir, &original.filename, &original.content, "second"));
+        assert_ne!(
+            first.join().unwrap().is_ok(),
+            second.join().unwrap().is_ok()
+        );
+    });
+    assert_eq!(dir.entries().unwrap().count(), 1);
+}

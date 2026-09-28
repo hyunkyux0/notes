@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { NoteEditor } from "./NoteEditor";
 import { useNotes } from "./useNotes";
 
 export function NotesPanel({ vaultPath }: { vaultPath: string }) {
@@ -58,13 +59,11 @@ export function NotesPanel({ vaultPath }: { vaultPath: string }) {
         ))}
       </ul>
       {note && (
-        <article aria-label="Note contents">
-          <h2>{note.filename}</h2>
-          <p className="vault-hint">
-            Read-only Markdown. Editing is coming next.
-          </p>
-          <pre className="note-content">{note.content}</pre>
-        </article>
+        <NoteEditor
+          key={JSON.stringify([vaultPath, note.filename])}
+          note={note}
+          vaultPath={vaultPath}
+        />
       )}
     </section>
   );

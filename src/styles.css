@@ -243,3 +243,15 @@ footer {
   background: var(--sidebar);
   line-height: 1.6;
 }
+
+textarea.note-content {
+  display: block;
+  width: 100%;
+  min-height: 260px;
+  resize: vertical;
+  color: inherit;
+  border: 1px solid var(--line);
+  font:
+    14px / 1.6 ui-monospace,
+    monospace;
+}
