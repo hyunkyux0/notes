@@ -309,3 +309,103 @@ fn rename_does_not_follow_source_or_destination_links() {
     assert_eq!(fs::read_to_string(target).unwrap(), "outside");
     assert_eq!(read(&dir, "note.md").unwrap().content, "local");
 }
+
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[test]
+fn moved_notes_are_listed_read_saved_and_moved_back() {
+    let (root, dir) = fixture();
+    fs::create_dir_all(root.path().join("archive/week1")).unwrap();
+    let original = create(&dir, "Study").unwrap();
+    let path = "archive/week1/study.md";
+    let moved = rename(&dir, &original.filename, path, &original.content).unwrap();
+    assert_eq!(moved.filename, path);
+    assert_eq!(moved.id, original.id);
+    assert_eq!(moved.content, original.content);
+    assert_eq!(list(&dir).unwrap(), [path]);
+    assert_eq!(read(&dir, path).unwrap().content, original.content);
+    let saved = save(&dir, path, &moved.content, "# Edited after move").unwrap();
+    assert_eq!(saved.filename, path);
+    assert_eq!(saved.id, original.id);
+    assert_eq!(
+        fs::read_dir(root.path().join("archive/week1"))
+            .unwrap()
+            .count(),
+        1
+    );
+    let returned = rename(&dir, path, "returned.md", &saved.content).unwrap();
+    assert_eq!(returned.content, saved.content);
+    assert_eq!(returned.id, original.id);
+    assert_eq!(list(&dir).unwrap(), ["returned.md"]);
+}
+
+#[test]
+fn move_rejects_collisions_missing_folders_and_unsafe_components() {
+    let (root, dir) = fixture();
+    fs::create_dir(root.path().join("folder")).unwrap();
+    fs::write(root.path().join("note.md"), "source").unwrap();
+    fs::write(root.path().join("folder/note.md"), "destination").unwrap();
+    for target in [
+        "folder/note.md",
+        "missing/note.md",
+        "folder/../outside.md",
+        "folder//other.md",
+        "./other.md",
+    ] {
+        assert!(
+            rename(&dir, "note.md", target, "source").is_err(),
+            "{target}"
+        );
+    }
+    assert_eq!(read(&dir, "note.md").unwrap().content, "source");
+    assert_eq!(read(&dir, "folder/note.md").unwrap().content, "destination");
+    assert!(!root.path().join("missing").exists());
+    assert!(rename(&dir, "note.md", "folder/new.md", "stale content").is_err());
+}
+
+#[cfg(unix)]
+#[test]
+fn directory_links_are_excluded_and_rejected_for_all_note_operations() {
+    let (root, dir) = fixture();
+    let outside = tempfile::tempdir().unwrap();
+    fs::write(outside.path().join("secret.md"), "outside").unwrap();
+    fs::create_dir(root.path().join("real")).unwrap();
+    fs::write(root.path().join("real/local.md"), "inside").unwrap();
+    std::os::unix::fs::symlink(outside.path(), root.path().join("escape")).unwrap();
+    std::os::unix::fs::symlink("real", root.path().join("alias")).unwrap();
+    assert_eq!(list(&dir).unwrap(), ["real/local.md"]);
+    for path in ["escape/secret.md", "alias/local.md"] {
+        assert!(read(&dir, path).is_err());
+        assert!(save(&dir, path, "outside", "draft").is_err());
+        assert!(rename(&dir, "real/local.md", path, "inside").is_err());
+        assert!(rename(&dir, path, "new.md", "outside").is_err());
+    }
+    assert_eq!(
+        fs::read_to_string(outside.path().join("secret.md")).unwrap(),
+        "outside"
+    );
+    assert_eq!(read(&dir, "real/local.md").unwrap().content, "inside");
+}
+
+#[test]
+fn nested_listing_skips_hidden_folders_and_non_markdown() {
+    let (root, dir) = fixture();
+    fs::create_dir_all(root.path().join("folder/deeper")).unwrap();
+    fs::create_dir(root.path().join(".hidden")).unwrap();
+    for name in [
+        "root.md",
+        "folder/b.md",
+        "folder/deeper/a.MD",
+        ".hidden/private.md",
+        "folder/photo.png",
+    ] {
+        fs::write(root.path().join(name), "text").unwrap();
+    }
+    assert_eq!(
+        list(&dir).unwrap(),
+        ["folder/b.md", "folder/deeper/a.MD", "root.md"]
+    );
+    assert_eq!(
+        read(&dir, "folder/deeper/a.MD").unwrap().filename,
+        "folder/deeper/a.MD"
+    );
+}

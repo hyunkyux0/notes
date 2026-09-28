@@ -9,46 +9,112 @@ const ID_PREFIX: &str = "<!-- local-notes-id: ";
 
 #[derive(Debug, Serialize)]
 pub struct Note {
+    /// Slash-separated path relative to the vault, including any containing folders.
     pub filename: String,
     pub id: Option<Uuid>,
     pub content: String,
 }
 
-fn valid_filename(name: &str) -> bool {
+fn valid_component(name: &str) -> bool {
     !name.is_empty()
-        && !name.contains(['/', '\\', ':', '\0'])
-        && name.to_ascii_lowercase().ends_with(".md")
+        && name != "."
+        && name != ".."
+        && !name.contains(['/', '\\', ':'])
+        && !name.chars().any(char::is_control)
+}
+
+fn valid_filename(name: &str) -> bool {
+    valid_component(name) && name.to_ascii_lowercase().ends_with(".md")
+}
+
+// Open each folder without following symlinks, then operate through its directory handle.
+fn open_folder(parent: &Dir, name: &str) -> Result<Dir, String> {
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    {
+        use rustix::fs::{openat, Mode, OFlags};
+        let fd = openat(
+            parent,
+            name,
+            OFlags::RDONLY | OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::CLOEXEC,
+            Mode::empty(),
+        )
+        .map_err(|_| "The folder is missing, inaccessible, or a symbolic link.")?;
+        Ok(Dir::from_std_file(std::fs::File::from(fd)))
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    {
+        let _ = (parent, name);
+        Err("Nested folders currently require macOS or Linux.".into())
+    }
+}
+
+fn note_location(root: &Dir, path: &str) -> Result<(Dir, String), String> {
+    let parts: Vec<_> = path.split('/').collect();
+    if parts.len() > 33 || parts.iter().any(|part| !valid_component(part)) {
+        return Err("Use a relative note path inside the vault, without empty, dot, or parent components (up to 32 folders).".into());
+    }
+    let filename = parts.last().ok_or("Missing note filename.")?;
+    if !valid_filename(filename) {
+        return Err("Choose a Markdown file inside the vault.".into());
+    }
+    let mut dir = root
+        .try_clone()
+        .map_err(|_| "The vault could not be opened.")?;
+    for part in &parts[..parts.len() - 1] {
+        dir = open_folder(&dir, part)?;
+    }
+    Ok((dir, (*filename).to_owned()))
 }
 
 pub fn list(dir: &Dir) -> Result<Vec<String>, String> {
-    let mut names = Vec::new();
-    for entry in dir
-        .entries()
-        .map_err(|_| "The vault could not be listed.")?
-    {
-        let entry = entry.map_err(|_| "A vault entry could not be read.")?;
-        if !entry
-            .file_type()
-            .map_err(|_| "A file type could not be read.")?
-            .is_file()
-        {
-            continue;
+    fn visit(dir: &Dir, prefix: &str, depth: usize, names: &mut Vec<String>) -> Result<(), String> {
+        if depth > 32 {
+            return Err("The vault exceeds the supported depth of 32 folders.".into());
         }
-        if let Some(name) = entry
-            .file_name()
-            .to_str()
-            .filter(|name| valid_filename(name))
+        for entry in dir
+            .entries()
+            .map_err(|_| "The vault could not be listed.")?
         {
-            names.push(name.to_owned());
+            let entry = entry.map_err(|_| "A vault entry could not be read.")?;
+            let Some(name) = entry.file_name().to_str().map(str::to_owned) else {
+                continue;
+            };
+            if !valid_component(&name) {
+                continue;
+            }
+            let kind = entry
+                .file_type()
+                .map_err(|_| "A file type could not be read.")?;
+            let path = format!("{prefix}{name}");
+            if kind.is_dir() && !name.starts_with('.') {
+                visit(
+                    &open_folder(dir, &name)?,
+                    &format!("{path}/"),
+                    depth + 1,
+                    names,
+                )?;
+            } else if kind.is_file() && valid_filename(&name) {
+                names.push(path);
+            }
         }
+        Ok(())
     }
+    let mut names = Vec::new();
+    visit(dir, "", 0, &mut names)?;
     names.sort();
     Ok(names)
 }
 
-pub fn read(dir: &Dir, filename: &str) -> Result<Note, String> {
+pub fn read(root: &Dir, path: &str) -> Result<Note, String> {
+    let (dir, filename) = note_location(root, path)?;
+    let mut note = read_file(&dir, &filename)?;
+    note.filename = path.to_owned();
+    Ok(note)
+}
+
+fn read_file(dir: &Dir, filename: &str) -> Result<Note, String> {
     if !valid_filename(filename) {
-        return Err("Choose a Markdown file directly inside the vault.".into());
+        return Err("Choose a Markdown filename within the opened folder.".into());
     }
     if !dir
         .symlink_metadata(filename)
@@ -95,11 +161,18 @@ fn from_content(filename: &str, content: String) -> Note {
 // Serializes this application's saves and renames; external editors do not share this lock.
 static FILE_OPERATIONS_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
-pub fn save(dir: &Dir, filename: &str, expected: &str, body: &str) -> Result<Note, String> {
+pub fn save(root: &Dir, path: &str, expected: &str, body: &str) -> Result<Note, String> {
+    let (dir, filename) = note_location(root, path)?;
+    let mut note = save_file(&dir, &filename, expected, body)?;
+    note.filename = path.to_owned();
+    Ok(note)
+}
+
+fn save_file(dir: &Dir, filename: &str, expected: &str, body: &str) -> Result<Note, String> {
     let _guard = FILE_OPERATIONS_LOCK
         .lock()
         .map_err(|_| "Saving is unavailable. Restart the app.")?;
-    let original = read(dir, filename)?;
+    let original = read_file(dir, filename)?;
     // Build from the client's base, never from a potentially changed disk ID.
     let base = from_content(filename, expected.to_owned());
     let header = if base.id.is_some() {
@@ -140,7 +213,7 @@ pub fn save(dir: &Dir, filename: &str, expected: &str, body: &str) -> Result<Not
         file.write_all(content.as_bytes())
             .and_then(|_| file.sync_all())
             .map_err(|_| "The draft could not be written. The original file is unchanged.")?;
-        if read(dir, filename)
+        if read_file(dir, filename)
             .map_err(|_| "The note became unavailable; your draft is retained.")?
             .content
             != expected
@@ -189,13 +262,13 @@ fn replace_checked(
         .and_then(|file| file.take(MAX_BYTES + 1).read_to_string(&mut displaced));
     if checked.is_err() || displaced != expected {
         // Never clean up a displaced file that we cannot prove was the expected version.
-        return Err(format!("Conflict during replacement: your draft is in the note; the displaced external version is retained as {temporary} in the vault. Inspect both before continuing."));
+        return Err(format!("Conflict during replacement: your draft is in the note; the displaced external version is retained as {temporary} beside the note. Inspect both before continuing."));
     }
     let _ = dir.remove_file(temporary);
     Ok(())
 }
 
-/// Rename within the vault without replacing any existing directory entry.
+/// Rename or move between opened vault folders without replacing a directory entry.
 pub fn rename(
     dir: &Dir,
     filename: &str,
@@ -205,17 +278,20 @@ pub fn rename(
     let _guard = FILE_OPERATIONS_LOCK
         .lock()
         .map_err(|_| "Renaming is unavailable. Restart the app.")?;
-    if !valid_filename(new_filename)
-        || new_filename.len() > 200
-        || new_filename.starts_with('.')
-        || new_filename.trim() != new_filename
-        || new_filename
-            .chars()
-            .any(|c| c.is_control() || "<>\"|?*".contains(c))
-    {
-        return Err("Enter a visible Markdown filename up to 200 bytes, without path separators or special characters.".into());
+    let (source_dir, source_name) = note_location(dir, filename)?;
+    let (destination_dir, destination_name) = note_location(dir, new_filename)?;
+    if new_filename.split('/').any(|part| {
+        part.len() > 200
+            || part.starts_with('.')
+            || part.trim() != part
+            || part.chars().any(|c| "<>\"|?*".contains(c))
+    }) {
+        return Err(
+            "Use visible path components up to 200 bytes, without special characters.".into(),
+        );
     }
-    let original = read(dir, filename)?;
+    let mut original = read_file(&source_dir, &source_name)?;
+    original.filename = filename.to_owned();
     if original.content != expected {
         return Err("Conflict: the file changed externally. Reload it before renaming.".into());
     }
@@ -224,10 +300,10 @@ pub fn rename(
     }
     #[cfg(any(target_os = "macos", target_os = "linux"))]
     let moved = rustix::fs::renameat_with(
-        dir,
-        filename,
-        dir,
-        new_filename,
+        &source_dir,
+        &source_name,
+        &destination_dir,
+        &destination_name,
         rustix::fs::RenameFlags::NOREPLACE,
     )
     .is_ok();
@@ -237,8 +313,11 @@ pub fn rename(
         return Err("Rename failed: the destination may already exist, the source disappeared, or safe renaming is unsupported. Refresh the notes list.".into());
     }
     // An external writer does not share our lock. Keep its bytes and report the new location.
-    match read(dir, new_filename) {
-        Ok(note) if note.content == expected => Ok(note),
+    match read_file(&destination_dir, &destination_name) {
+        Ok(mut note) if note.content == expected => {
+            note.filename = new_filename.to_owned();
+            Ok(note)
+        },
         _ => Err(format!("The file moved to {new_filename}, but changed externally or became unreadable. Refresh the list; no file contents were rewritten.")),
     }
 }

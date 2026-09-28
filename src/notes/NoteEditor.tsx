@@ -223,7 +223,7 @@ export function NoteEditor({
           void renameNote();
         }}
       >
-        <label htmlFor="rename-note">Filename (including .md)</label>
+        <label htmlFor="rename-note">Path within vault (including .md)</label>
         <input
           id="rename-note"
           value={newFilename}
@@ -242,10 +242,11 @@ export function NoteEditor({
             newFilename === note.filename
           }
         >
-          Rename note
+          Rename or move note
         </button>
         <p className="vault-hint">
-          Save or discard pending changes before renaming.
+          Use / to move into an existing folder. Save or discard pending changes
+          first.
         </p>
         {renameError && <p role="alert">{renameError}</p>}
       </form>

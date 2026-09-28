@@ -1,8 +1,8 @@
-After this renaming PR is merged, implement safe moves between existing folders
-inside the selected vault, including listing and opening moved notes. Preserve
-stable IDs and contents, reject collisions and paths/symlinks outside the vault,
-and preserve drafts or block moving unsaved notes. Surface missing or externally
-changed files. Defer rich Markdown editing, search, and Google integration. Keep
-changes reviewable, add meaningful tests, review structure and naming, consolidate
-actual duplication, self-review, validate, and open a PR with Summary, How to review,
-and How to test. Send the Telegram ping and stop for human review.
+After this folder-moves PR is merged, begin section 3 with a CodeMirror 6 Markdown
+editor replacing the plain textarea. Add Markdown syntax highlighting and standard
+editing behavior while preserving stable IDs, autosave, recovery drafts, conflict
+handling, and rename/move protections. Keep this review to the editing surface;
+defer rendered preview, LaTeX rendering, images, search, and Google integration.
+Add meaningful editor/persistence regression tests, review structure and naming,
+consolidate actual duplication, self-review, validate, and open a focused PR with
+Summary, How to review, and How to test. Send the Telegram ping and stop for review.
