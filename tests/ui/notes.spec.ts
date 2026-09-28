@@ -19,16 +19,26 @@ test.beforeEach(async ({ page }) => {
     runtime.__TAURI_INTERNALS__ = {
       invoke: async (command, args = {}) => {
         const content = localStorage.getItem("test:disk") ?? "# Original\n";
-        const note = { filename: "study.md", id: null, content };
+        const filename = localStorage.getItem("test:filename") ?? "study.md";
+        const note = { filename, id: null, content };
         switch (command) {
           case "get_vault":
             return { path: "/test/vault" };
           case "list_notes":
-            return sessionStorage.getItem("test:missing") ? [] : ["study.md"];
+            return sessionStorage.getItem("test:missing") ? [] : [filename];
           case "read_note":
             if (sessionStorage.getItem("test:missing")) throw "File missing";
             return note;
+          case "rename_note": {
+            if (args.newFilename === "occupied.md")
+              throw "Destination already exists";
+            if (args.expectedContent !== content)
+              throw "Conflict: external edit";
+            localStorage.setItem("test:filename", args.newFilename);
+            return { ...note, filename: args.newFilename };
+          }
           case "save_note": {
+            if (args.filename !== filename) throw "Wrong note filename";
             sessionStorage.setItem(
               "test:saves",
               String(Number(sessionStorage.getItem("test:saves")) + 1),
@@ -193,4 +203,58 @@ test("reverting before autosave clears the recovery draft", async ({
   expect(
     await page.evaluate((key) => localStorage.getItem(key), draftKey),
   ).toBeNull();
+});
+
+test("rename updates selection and later autosaves use the new filename", async ({
+  page,
+}) => {
+  await page.getByLabel("Filename (including .md)").fill("renamed.md");
+  await page.getByRole("button", { name: "Rename note", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "renamed.md", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "study.md", exact: true }),
+  ).toHaveCount(0);
+  await page.getByLabel("Markdown content").fill("# After rename");
+  await expect(page.getByRole("status")).toHaveText("Saved");
+  await page.reload();
+  await page.getByRole("button", { name: "renamed.md", exact: true }).click();
+  await expect(page.getByLabel("Markdown content")).toHaveValue(
+    "# After rename",
+  );
+});
+
+test("unsaved drafts block renaming", async ({ page }) => {
+  await page.evaluate(() => sessionStorage.setItem("test:fail", "yes"));
+  await page.getByLabel("Filename (including .md)").fill("renamed.md");
+  await page.getByLabel("Markdown content").fill("# Pending draft");
+  await expect(
+    page.getByRole("button", { name: "Rename note", exact: true }),
+  ).toBeDisabled();
+  await expect(page.getByRole("alert")).toContainText("Save failed");
+  await expect(
+    page.getByRole("button", { name: "Rename note", exact: true }),
+  ).toBeDisabled();
+});
+
+test("collisions and destination drafts prevent renaming without losing the note", async ({
+  page,
+}) => {
+  await page.getByLabel("Filename (including .md)").fill("occupied.md");
+  await page.getByRole("button", { name: "Rename note", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("already exists");
+  await page.evaluate(() =>
+    localStorage.setItem(
+      'notes:draft:["/test/vault","Recovery.md"]',
+      JSON.stringify({ expected: "old", savedBody: "old", body: "draft" }),
+    ),
+  );
+  await page.getByLabel("Filename (including .md)").fill("recovery.md");
+  await page.getByRole("button", { name: "Rename note", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("recovery drafts");
+  await expect(
+    page.getByRole("heading", { name: "study.md", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByLabel("Markdown content")).toHaveValue("# Original\n");
 });

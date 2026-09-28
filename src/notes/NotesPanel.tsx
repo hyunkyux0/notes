@@ -4,8 +4,16 @@ import { useNotes } from "./useNotes";
 
 export function NotesPanel({ vaultPath }: { vaultPath: string }) {
   const [title, setTitle] = useState("");
-  const { files, note, busy, error, createNote, openNote, refreshNotes } =
-    useNotes(vaultPath);
+  const {
+    files,
+    note,
+    busy,
+    error,
+    createNote,
+    openNote,
+    refreshNotes,
+    acceptRenamedNote,
+  } = useNotes(vaultPath);
 
   return (
     <section
@@ -63,6 +71,7 @@ export function NotesPanel({ vaultPath }: { vaultPath: string }) {
           key={JSON.stringify([vaultPath, note.filename])}
           note={note}
           vaultPath={vaultPath}
+          onRenamed={acceptRenamedNote}
         />
       )}
     </section>

@@ -90,6 +90,14 @@ these recovery files are not automatically deleted. Ordinary successful saves cl
 up their temporary file. Editors writing through an old, already-open file handle
 after replacement do not participate in this conflict protocol.
 
+To rename a saved note, enter its new filename (including `.md`) and select Rename
+note. Names stay in the same vault folder; path separators, hidden names, control
+characters, and certain special characters are rejected. Existing destinations
+are never replaced, including case-only collisions on case-insensitive filesystems.
+Save or discard recovery drafts for both names first. IDs, contents, and permissions
+stay unchanged. If the source changes externally, reload before retrying; a change
+detected after the move reports the new location so you can refresh the list.
+
 ## Structure
 
 - `src/`: React interface and styles.
