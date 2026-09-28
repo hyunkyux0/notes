@@ -10,6 +10,8 @@ review history and sync state. Use CodeMirror 6 and KaTeX, with local attachment
 2. Local vault, notes, stable IDs, safe autosave, rename/move, external edit handling,
    folder creation, and an expandable folder/file tree for navigation. Show empty
    folders, open notes from the tree, and create notes in the selected folder.
+   Use readable title-based filenames with numeric collision suffixes; keep stable
+   IDs inside Markdown. Deliver this filename improvement before image attachments.
 3. Workspace layout and Obsidian-style live Markdown editing, delivered through
    the separate review checkpoints below. Live preview is the default editing
    experience; a Source mode toggle exposes raw Markdown.

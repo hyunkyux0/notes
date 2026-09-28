@@ -1,4 +1,4 @@
-After this equations PR is merged, begin the images checkpoint with safe local
+After this readable-filename PR is merged, begin the images checkpoint with safe local
 image attachments and inline image preview. Support drag-and-drop and paste of
 local raster images, storing attachments inside the selected vault with collision-
 safe filenames and Markdown references relative to the note. Preserve existing

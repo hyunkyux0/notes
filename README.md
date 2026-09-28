@@ -62,8 +62,12 @@ The browser preview cannot select local folders.
 
 In Notebook, enter a title and select Create note. The file contains a heading and
 a `<!-- local-notes-id: UUID -->` first line, which preserves its identity when
-renamed or moved with its content intact. Filenames use a sanitized title plus UUID;
-repeated titles create separate files. Existing files are never replaced.
+renamed or moved with its content intact. Filenames retain the title, including
+spaces and Unicode (for example, `Test 1.md`).
+Repeated titles use `Test 1 (2).md`, then `(3)`, and so on. Unsafe filename characters
+become hyphens; leading/trailing dots and whitespace are removed, long names are
+shortened, and reserved device names are prefixed with `_`. Existing files keep
+their names and are never replaced. Stable IDs remain inside the Markdown.
 
 The list includes regular `.md` files in the vault and its visible subfolders (UTF-8, up to 2 MiB),
 plus files with recovery drafts, including deleted files. Use Refresh notes after
