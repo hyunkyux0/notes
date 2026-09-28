@@ -319,3 +319,20 @@ input {
   max-height: 480px;
   object-fit: contain;
 }
+
+.review-settings fieldset {
+  display: grid;
+  gap: 12px;
+  max-width: 520px;
+  border: 0;
+  padding: 0;
+  margin-bottom: 12px;
+}
+.review-settings label {
+  display: grid;
+  gap: 4px;
+}
+.review-settings input {
+  font: inherit;
+  padding: 8px;
+}

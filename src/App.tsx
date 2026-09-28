@@ -1,6 +1,7 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { type ReactNode, useEffect, useState } from "react";
 import { NotesPanel } from "./notes/NotesPanel";
+import { ReviewSettings } from "./ReviewSettings";
 
 type Vault = { path: string };
 type Section = "Notebook" | "Reviews" | "Settings";
@@ -183,15 +184,7 @@ export function App() {
           <div className="editor-pane" hidden={section !== "Notebook"}>
             {editor}
           </div>
-          {section === "Settings" && (
-            <section className="welcome">
-              <h1>Settings</h1>
-              <p>
-                Calendar, review-time, and notification settings are coming
-                later.
-              </p>
-            </section>
-          )}
+          {section === "Settings" && <ReviewSettings />}
           {section === "Reviews" && (
             <section className="welcome">
               <h1>Reviews</h1>

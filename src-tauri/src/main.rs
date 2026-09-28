@@ -3,6 +3,7 @@
 mod app_settings;
 mod note_commands;
 mod notes;
+mod review_preferences;
 mod vault;
 mod vault_commands;
 mod windows;
@@ -55,6 +56,8 @@ fn main() {
         })
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
+            review_preferences::get_review_settings,
+            review_preferences::save_review_settings,
             windows::new_window,
             windows::acquire_note,
             windows::release_note,

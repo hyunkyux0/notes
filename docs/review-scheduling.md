@@ -39,5 +39,5 @@ scheduling core. The existing full Rust test command also includes these tests.
 This checkpoint does not create schedules in the running app. Later persistence
 integration must record the first nonempty save and the resulting schedule once,
 then reuse them on ordinary edits. Settings changes must not silently reschedule
-existing reviews. Settings UI, persistence, Google Calendar, and notifications
-remain separate checkpoints.
+existing reviews. The Settings UI now persists preferences using this validation. Note schedule
+persistence, Google Calendar, and notifications remain separate checkpoints.

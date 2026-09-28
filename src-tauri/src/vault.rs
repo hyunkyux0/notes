@@ -1,6 +1,6 @@
 //! The vault is a user-owned folder; only its location is stored in app settings.
 use serde::{Deserialize, Serialize};
-use std::{fs, io::Write, path::Path};
+use std::{fs, path::Path};
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 pub struct Vault {
@@ -41,22 +41,7 @@ pub fn select(settings: &Path, selected: Option<&Path>) -> Result<Option<Vault>,
         return Ok(None); // Cancel must not erase or rewrite an existing selection.
     };
     let vault = validate(selected)?;
-    let parent = settings.parent().ok_or("Invalid settings location.")?;
-    fs::create_dir_all(parent).map_err(|_| "The app settings folder could not be created.")?;
-    let bytes = serde_json::to_vec(&vault).map_err(|_| "Vault settings could not be encoded.")?;
-    // Write beside the destination so replacement is atomic on the same filesystem.
-    let mut temporary =
-        tempfile::NamedTempFile::new_in(parent).map_err(|_| "Vault settings could not be saved.")?;
-    temporary
-        .write_all(&bytes)
-        .map_err(|_| "Vault settings could not be written.")?;
-    temporary
-        .as_file()
-        .sync_all()
-        .map_err(|_| "Vault settings could not be flushed.")?;
-    temporary
-        .persist(settings)
-        .map_err(|_| "Vault settings could not be replaced.")?;
+    crate::app_settings::write_json(settings, &vault)?;
     Ok(Some(vault))
 }
 
