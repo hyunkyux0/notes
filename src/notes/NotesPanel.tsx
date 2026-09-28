@@ -1,44 +1,10 @@
-import { invoke } from "@tauri-apps/api/core";
-import { useEffect, useState } from "react";
-
-type Note = { filename: string; id: string | null; content: string };
+import { useState } from "react";
+import { useNotes } from "./useNotes";
 
 export function NotesPanel({ vaultPath }: { vaultPath: string }) {
-  const [files, setFiles] = useState<string[]>([]);
-  const [note, setNote] = useState<Note | null>(null);
   const [title, setTitle] = useState("");
-  const [busy, setBusy] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let active = true;
-    invoke<string[]>("list_notes", { vaultPath })
-      .then((names) => {
-        if (active) setFiles(names);
-      })
-      .catch((reason: unknown) => {
-        if (active) setError(String(reason));
-      })
-      .finally(() => {
-        if (active) setBusy(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [vaultPath]);
-
-  async function run(action: () => Promise<void>) {
-    if (busy) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await action();
-    } catch (reason) {
-      setError(String(reason));
-    } finally {
-      setBusy(false);
-    }
-  }
+  const { files, note, busy, error, createNote, openNote, refreshNotes } =
+    useNotes(vaultPath);
 
   return (
     <section
@@ -47,17 +13,9 @@ export function NotesPanel({ vaultPath }: { vaultPath: string }) {
       aria-busy={busy}
     >
       <form
-        onSubmit={(event) => {
+        onSubmit={async (event) => {
           event.preventDefault();
-          void run(async () => {
-            const created = await invoke<Note>("create_note", {
-              vaultPath,
-              title,
-            });
-            setFiles((current) => [...current, created.filename].sort());
-            setNote(created);
-            setTitle("");
-          });
+          if (await createNote(title)) setTitle("");
         }}
       >
         <label htmlFor="note-title">New note title</label>
@@ -78,16 +36,7 @@ export function NotesPanel({ vaultPath }: { vaultPath: string }) {
         </button>
       </form>
       {error && <p role="alert">{error}</p>}
-      <button
-        type="button"
-        disabled={busy}
-        onClick={() =>
-          void run(async () => {
-            setNote(null);
-            setFiles(await invoke<string[]>("list_notes", { vaultPath }));
-          })
-        }
-      >
+      <button type="button" disabled={busy} onClick={() => void refreshNotes()}>
         Refresh notes
       </button>
       {busy && <p role="status">Loading notes…</p>}
@@ -101,14 +50,7 @@ export function NotesPanel({ vaultPath }: { vaultPath: string }) {
               type="button"
               disabled={busy}
               aria-pressed={note?.filename === filename}
-              onClick={() =>
-                void run(async () => {
-                  setNote(null);
-                  setNote(
-                    await invoke<Note>("read_note", { vaultPath, filename }),
-                  );
-                })
-              }
+              onClick={() => void openNote(filename)}
             >
               {filename}
             </button>
