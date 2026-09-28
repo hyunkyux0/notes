@@ -548,3 +548,119 @@ fn simultaneous_creates_keep_every_note() {
         );
     }
 }
+
+fn png_bytes() -> Vec<u8> {
+    let mut output = std::io::Cursor::new(Vec::new());
+    image::DynamicImage::new_rgb8(2, 2)
+        .write_to(&mut output, image::ImageFormat::Png)
+        .unwrap();
+    output.into_inner()
+}
+
+#[test]
+fn images_preserve_originals_and_survive_rename_but_block_moves() {
+    let (root, dir) = fixture();
+    create_folder(&dir, "", "Course").unwrap();
+    let note = create(&dir, "Course", "Study").unwrap();
+    let bytes = png_bytes();
+    let first = images::import(&dir, &note.filename, &bytes).unwrap();
+    let second = images::import(&dir, &note.filename, &bytes).unwrap();
+    assert_ne!(first, second);
+    assert_eq!(
+        fs::read(root.path().join("Course").join(&first)).unwrap(),
+        bytes
+    );
+    assert!(images::preview(&dir, &note.filename, &first)
+        .unwrap()
+        .starts_with("data:image/png;base64,"));
+    let saved = save(
+        &dir,
+        &note.filename,
+        &note.content,
+        &format!("![Image]({first})"),
+    )
+    .unwrap();
+    assert!(rename(&dir, &saved.filename, "Moved.md", &saved.content)
+        .unwrap_err()
+        .contains("attachments"));
+    let renamed = rename(&dir, &saved.filename, "Course/Renamed.md", &saved.content).unwrap();
+    assert_eq!(renamed.id, saved.id);
+    assert_eq!(renamed.content, saved.content);
+    assert!(images::preview(&dir, &renamed.filename, &first).is_ok());
+    assert_eq!(list(&dir).unwrap().folders, ["Course"]);
+}
+
+#[test]
+fn image_import_rejects_invalid_active_oversized_and_missing_inputs() {
+    let (root, dir) = fixture();
+    let note = create(&dir, "", "Study").unwrap();
+    for bytes in [
+        b"<svg xmlns='http://www.w3.org/2000/svg'/>".to_vec(),
+        b"<html>test</html>".to_vec(),
+        vec![0; 8 * 1024 * 1024 + 1],
+        vec![137, 80, 78, 71],
+    ] {
+        assert!(images::import(&dir, &note.filename, &bytes).is_err());
+    }
+    assert!(!root.path().join(".attachments").exists());
+    assert!(images::import(&dir, "missing.md", &png_bytes()).is_err());
+    assert!(images::import(&dir, "../escape.md", &png_bytes()).is_err());
+    let mut oversized = std::io::Cursor::new(Vec::new());
+    image::DynamicImage::new_rgb8(4097, 1)
+        .write_to(&mut oversized, image::ImageFormat::Png)
+        .unwrap();
+    assert!(images::import(&dir, &note.filename, &oversized.into_inner()).is_err());
+}
+
+#[test]
+fn image_preview_rejects_paths_links_and_changed_image_bytes() {
+    let (root, dir) = fixture();
+    let note = create(&dir, "", "Study").unwrap();
+    let reference = images::import(&dir, &note.filename, &png_bytes()).unwrap();
+    for path in [
+        "../outside.png",
+        "https://example.org/a.png",
+        "data:image/svg+xml,test",
+        ".attachments/../../outside.png",
+        ".attachments/test.svg",
+    ] {
+        assert!(images::preview(&dir, &note.filename, path).is_err());
+    }
+    fs::write(root.path().join(&reference), "<svg/>").unwrap();
+    assert!(images::preview(&dir, &note.filename, &reference).is_err());
+    fs::remove_file(root.path().join(&reference)).unwrap();
+    let outside = tempfile::tempdir().unwrap();
+    let target = outside.path().join("outside.png");
+    fs::write(&target, png_bytes()).unwrap();
+    std::os::unix::fs::symlink(&target, root.path().join(&reference)).unwrap();
+    assert!(images::preview(&dir, &note.filename, &reference).is_err());
+    fs::remove_file(root.path().join(&reference)).unwrap();
+    fs::remove_dir(root.path().join(".attachments")).unwrap();
+    std::os::unix::fs::symlink(outside.path(), root.path().join(".attachments")).unwrap();
+    assert!(images::import(&dir, &note.filename, &png_bytes()).is_err());
+    assert!(images::preview(&dir, &note.filename, &reference).is_err());
+    assert_eq!(fs::read_dir(outside.path()).unwrap().count(), 1);
+}
+
+#[test]
+fn supported_raster_formats_are_validated_and_original_bytes_retained() {
+    let (root, dir) = fixture();
+    let note = create(&dir, "", "Formats").unwrap();
+    for format in [
+        image::ImageFormat::Png,
+        image::ImageFormat::Jpeg,
+        image::ImageFormat::Gif,
+        image::ImageFormat::WebP,
+    ] {
+        let mut bytes = std::io::Cursor::new(Vec::new());
+        image::DynamicImage::new_rgb8(2, 2)
+            .write_to(&mut bytes, format)
+            .unwrap();
+        let reference = images::import(&dir, &note.filename, bytes.get_ref()).unwrap();
+        assert_eq!(
+            fs::read(root.path().join(&reference)).unwrap(),
+            *bytes.get_ref()
+        );
+        assert!(images::preview(&dir, &note.filename, &reference).is_ok());
+    }
+}

@@ -58,6 +58,7 @@ export function NoteEditor({
   const [confirmReload, setConfirmReload] = useState(false);
   const [reloading, setReloading] = useState(false);
   const [newFilename, setNewFilename] = useState(note.filename);
+  const [importing, setImporting] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [renameError, setRenameError] = useState<string | null>(null);
   const requestInFlight = useRef(false);
@@ -154,7 +155,13 @@ export function NoteEditor({
   }
 
   async function reloadDiskVersion() {
-    if (requestInFlight.current || pendingSaves.has(key) || reloading) return;
+    if (
+      requestInFlight.current ||
+      pendingSaves.has(key) ||
+      reloading ||
+      importing
+    )
+      return;
     setConfirmReload(false);
     setReloading(true);
     try {
@@ -175,7 +182,7 @@ export function NoteEditor({
   }
 
   async function renameNote() {
-    if (requestInFlight.current) return;
+    if (requestInFlight.current || importing) return;
     if (
       dirty ||
       saving ||
@@ -231,8 +238,11 @@ export function NoteEditor({
       </p>
 
       <MarkdownEditor
+        vaultPath={vaultPath}
+        filename={note.filename}
+        onImportBusy={setImporting}
         value={draft.body}
-        disabled={reloading || renaming || draftLoadFailed}
+        disabled={reloading || renaming || draftLoadFailed || importing}
         onEdit={edit}
       />
 
@@ -248,7 +258,7 @@ export function NoteEditor({
       )}
       <button
         type="button"
-        disabled={saving || reloading || renaming}
+        disabled={saving || reloading || renaming || importing}
         onClick={() =>
           dirty || error ? setConfirmReload(true) : void reloadDiskVersion()
         }
@@ -262,7 +272,7 @@ export function NoteEditor({
           </p>
           <button
             type="button"
-            disabled={saving || reloading || renaming}
+            disabled={saving || reloading || renaming || importing}
             onClick={() => void reloadDiskVersion()}
           >
             Discard draft and reload
@@ -289,6 +299,7 @@ export function NoteEditor({
         <button
           type="submit"
           disabled={
+            importing ||
             dirty ||
             saving ||
             reloading ||

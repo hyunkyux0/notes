@@ -1,4 +1,9 @@
-import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
+import {
+  defaultKeymap,
+  history,
+  historyKeymap,
+  isolateHistory,
+} from "@codemirror/commands";
 import { markdown, markdownKeymap } from "@codemirror/lang-markdown";
 import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { Compartment, EditorState, type Extension } from "@codemirror/state";
@@ -8,6 +13,7 @@ import { useLayoutEffect, useRef, useState } from "react";
 
 import { equationSyntax } from "./equations";
 import { liveMarkdownPreview } from "./liveMarkdownPreview";
+import { imageContext, importImage } from "./noteImages";
 
 const markdownHighlighting = HighlightStyle.define([
   { tag: tags.heading, color: "var(--syntax)", fontWeight: "600" },
@@ -20,33 +26,92 @@ const markdownHighlighting = HighlightStyle.define([
 
 type Props = {
   value: string;
+  vaultPath: string;
+  filename: string;
+  onImportBusy: (busy: boolean) => void;
   disabled: boolean;
   // Persistence must accept the text before it enters the editor's state/history.
   onEdit: (value: string) => boolean;
 };
 
-export function MarkdownEditor({ value, disabled, onEdit }: Props) {
+export function MarkdownEditor({
+  value,
+  disabled,
+  onEdit,
+  vaultPath,
+  filename,
+  onImportBusy,
+}: Props) {
+  const [imageError, setImageError] = useState<string | null>(null);
+  const importing = useRef(false);
   const [sourceMode, setSourceMode] = useState(false);
   const preview = useRef(new Compartment());
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
-  const props = useRef({ value, disabled, onEdit });
+  const props = useRef({
+    value,
+    disabled,
+    onEdit,
+    vaultPath,
+    filename,
+    onImportBusy,
+  });
   const editing = useRef(new Compartment());
   const extensions = useRef<Extension[]>([]);
 
   useLayoutEffect(() => {
-    props.current = { value, disabled, onEdit };
+    props.current = {
+      value,
+      disabled,
+      onEdit,
+      vaultPath,
+      filename,
+      onImportBusy,
+    };
   });
 
   useLayoutEffect(() => {
     if (!host.current) return;
     extensions.current = [
+      imageContext.of({
+        vaultPath: props.current.vaultPath,
+        filename: props.current.filename,
+      }),
       markdown({ extensions: [equationSyntax] }),
       preview.current.of(liveMarkdownPreview),
       syntaxHighlighting(markdownHighlighting),
       history(),
       keymap.of([...markdownKeymap, ...defaultKeymap, ...historyKeymap]),
       EditorView.lineWrapping,
+      EditorView.domEventHandlers({
+        paste(event, editor) {
+          const files = Array.from(event.clipboardData?.files ?? []);
+          if (!files.length) return false;
+          event.preventDefault();
+          void attach(
+            files,
+            editor,
+            editor.state.selection.main.from,
+            editor.state.selection.main.to,
+          );
+          return true;
+        },
+        dragover(event) {
+          if (!event.dataTransfer?.types.includes("Files")) return false;
+          event.preventDefault();
+          return true;
+        },
+        drop(event, editor) {
+          const files = Array.from(event.dataTransfer?.files ?? []);
+          if (!files.length) return false;
+          event.preventDefault();
+          const position =
+            editor.posAtCoords({ x: event.clientX, y: event.clientY }) ??
+            editor.state.selection.main.from;
+          void attach(files, editor, position);
+          return true;
+        },
+      }),
       // Tauri gives this marker a fresh style nonce in production. Dev has no CSP.
       EditorView.cspNonce.of(
         document.querySelector<HTMLStyleElement>("#editor-style-nonce")
@@ -54,6 +119,42 @@ export function MarkdownEditor({ value, disabled, onEdit }: Props) {
       ),
       editing.current.of([]),
     ];
+    async function attach(
+      files: File[],
+      editor: EditorView,
+      position: number,
+      end = position,
+    ) {
+      if (props.current.disabled || importing.current) return;
+      if (files.length !== 1) {
+        setImageError("Attach one image at a time.");
+        return;
+      }
+      importing.current = true;
+      props.current.onImportBusy(true);
+      setImageError(null);
+      const original = editor.state.doc;
+      try {
+        const reference = await importImage(files[0], props.current);
+        if (view.current !== editor) return;
+        if (!editor.state.doc.eq(original)) {
+          throw new Error(
+            "The note changed during import. The image is stored in .attachments; drop or paste again to insert it.",
+          );
+        }
+        const markdown = `![Image](${reference})`;
+        editor.dispatch({
+          changes: { from: position, to: end, insert: markdown },
+          selection: { anchor: position + markdown.length },
+          annotations: isolateHistory.of("full"),
+        });
+      } catch (error) {
+        if (view.current === editor) setImageError(String(error));
+      } finally {
+        importing.current = false;
+        if (view.current === editor) props.current.onImportBusy(false);
+      }
+    }
     const editor = new EditorView({
       parent: host.current,
       state: EditorState.create({
@@ -118,6 +219,7 @@ export function MarkdownEditor({ value, disabled, onEdit }: Props) {
         Source mode
       </button>
       <div className="markdown-editor" ref={host} />
+      {imageError && <p role="alert">{imageError}</p>}
     </>
   );
 }

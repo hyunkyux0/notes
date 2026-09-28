@@ -16,6 +16,8 @@ fn main() {
             note_commands::rename_note,
             note_commands::create_note,
             note_commands::create_folder,
+            note_commands::import_note_image,
+            note_commands::read_note_image,
             vault_commands::get_vault,
             vault_commands::choose_vault,
         ])

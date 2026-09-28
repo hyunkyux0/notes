@@ -32,6 +32,19 @@ export function App() {
     };
   }, [desktop]);
 
+  useEffect(() => {
+    // HTML5 file drops must never navigate the WebView, even outside the editor.
+    const preventFileNavigation = (event: DragEvent) => {
+      if (event.dataTransfer?.types.includes("Files")) event.preventDefault();
+    };
+    window.addEventListener("dragover", preventFileNavigation);
+    window.addEventListener("drop", preventFileNavigation);
+    return () => {
+      window.removeEventListener("dragover", preventFileNavigation);
+      window.removeEventListener("drop", preventFileNavigation);
+    };
+  }, []);
+
   async function choose() {
     setBusy(true);
     try {

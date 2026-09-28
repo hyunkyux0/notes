@@ -22,6 +22,24 @@ test.beforeEach(async ({ page }) => {
         const filename = localStorage.getItem("test:filename") ?? "study.md";
         const note = { filename, id: null, content };
         switch (command) {
+          case "import_note_image":
+            await new Promise((resolve) =>
+              setTimeout(
+                resolve,
+                Number(sessionStorage.getItem("test:image-delay")),
+              ),
+            );
+            if (sessionStorage.getItem("test:image-fail"))
+              throw "Invalid image";
+            return ".attachments/12345678-1234-4234-8234-123456789abc.png";
+          case "read_note_image":
+            sessionStorage.setItem(
+              "test:image-reads",
+              String(Number(sessionStorage.getItem("test:image-reads")) + 1),
+            );
+            if (sessionStorage.getItem("test:image-missing"))
+              throw "Image missing";
+            return "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==";
           case "get_vault":
             return sessionStorage.getItem("test:no-vault")
               ? null
@@ -611,7 +629,7 @@ test("undo and redo survive autosave; disk reload clears previous history", asyn
 test("editor styles use the provided nonce under a restrictive style policy", async ({
   page,
 }) => {
-  await page.route("http://127.0.0.1:1420/", async (route) => {
+  await page.route(page.url(), async (route) => {
     const response = await route.fetch();
     const html = (await response.text())
       .replace(
@@ -627,7 +645,8 @@ test("editor styles use the provided nonce under a restrictive style policy", as
       body: html,
       headers: {
         ...response.headers(),
-        "Content-Security-Policy": "style-src 'self' 'nonce-test-editor-nonce'",
+        "Content-Security-Policy":
+          "style-src 'self' 'nonce-test-editor-nonce'; img-src 'self' data:",
       },
     });
   });
@@ -662,11 +681,15 @@ test("editor styles use the provided nonce under a restrictive style policy", as
     });
   });
   await page.evaluate(() =>
-    localStorage.setItem("test:disk", "Intro\n\n$\\frac{a}{b}$\n\nend"),
+    localStorage.setItem(
+      "test:disk",
+      "Intro\n\n$\\frac{a}{b}$\n\n![Image](.attachments/12345678-1234-4234-8234-123456789abc.png)\n\nend",
+    ),
   );
   await page.getByRole("button", { name: "Refresh notes" }).click();
   await page.getByRole("button", { name: "study.md", exact: true }).click();
   await expect(page.locator(".equation-preview .mfrac")).toBeVisible();
+  await expect(page.locator(".note-image img")).toBeVisible();
   expect(
     await page.evaluate(
       () => document.documentElement.dataset.equationPolicyViolations,
@@ -867,4 +890,153 @@ test("code, escaped dollars, currency, and unmatched math stay literal", async (
   expect(await page.evaluate((key) => localStorage.getItem(key), diskKey)).toBe(
     document,
   );
+});
+
+async function transferImage(
+  page: import("@playwright/test").Page,
+  action: "paste" | "drop",
+) {
+  await page.getByLabel("Markdown content").evaluate((element, action) => {
+    const data = new DataTransfer();
+    data.items.add(
+      new File([new Uint8Array([137, 80, 78, 71])], "picture.png", {
+        type: "image/png",
+      }),
+    );
+    element.dispatchEvent(
+      action === "paste"
+        ? new ClipboardEvent("paste", {
+            clipboardData: data,
+            bubbles: true,
+            cancelable: true,
+          })
+        : new DragEvent("drop", {
+            dataTransfer: data,
+            bubbles: true,
+            cancelable: true,
+          }),
+    );
+  }, action);
+}
+
+const imageMarkdown =
+  "![Image](.attachments/12345678-1234-4234-8234-123456789abc.png)";
+
+test("pasted image keeps Markdown, undo history, preview and autosave", async ({
+  page,
+}) => {
+  const editor = page.getByLabel("Markdown content");
+  await editor.fill("Before\n\n");
+  await editor.press("ControlOrMeta+End");
+  await transferImage(page, "paste");
+  await expect(editor).toContainText(imageMarkdown);
+  await editor.press("ControlOrMeta+z");
+  await expect(editor).not.toContainText(imageMarkdown);
+  await expect(editor).toContainText("Before");
+  await editor.press("ControlOrMeta+Shift+z");
+  await expect(editor).toContainText(imageMarkdown);
+  await editor.press("ControlOrMeta+Home");
+  await expect(page.locator(".note-image img")).toBeVisible();
+  await page.getByRole("button", { name: "Source mode" }).click();
+  await expect(page.locator(".note-image")).toHaveCount(0);
+  await expect(editor).toContainText(imageMarkdown);
+  await expect
+    .poll(() => page.evaluate(() => localStorage.getItem("test:disk")))
+    .toBe(`Before\n\n${imageMarkdown}`);
+  await page.getByRole("button", { name: "Source mode" }).click();
+  await page.getByRole("button", { name: "Edit image Markdown" }).click();
+  await expect(editor).toContainText(imageMarkdown);
+});
+
+test("dropped image retains a draft on save conflict; invalid import leaves text intact", async ({
+  page,
+}) => {
+  await page.evaluate(() => sessionStorage.setItem("test:image-fail", "yes"));
+  await transferImage(page, "drop");
+  await expect(page.getByRole("alert")).toContainText("Invalid image");
+  await expect(page.getByLabel("Markdown content")).toContainText("Original");
+  await page.evaluate(() => {
+    sessionStorage.removeItem("test:image-fail");
+    localStorage.setItem("test:disk", "External version");
+  });
+  await transferImage(page, "drop");
+  await expect(page.getByRole("alert")).toContainText("Conflict");
+  expect(await page.evaluate(() => localStorage.getItem("test:disk"))).toBe(
+    "External version",
+  );
+  expect(
+    await page.evaluate((key) => localStorage.getItem(key), draftKey),
+  ).toContain(imageMarkdown);
+});
+
+test("image imports cannot land in a different note after navigation", async ({
+  page,
+}) => {
+  await page.evaluate(() => sessionStorage.setItem("test:image-delay", "800"));
+  await transferImage(page, "paste");
+  await expect(
+    page.getByRole("button", { name: "Reload disk version" }),
+  ).toBeDisabled();
+  await page.getByRole("button", { name: "Refresh notes" }).click();
+  await page.getByRole("button", { name: "study.md", exact: true }).click();
+  await page.waitForTimeout(1000);
+  await expect(page.getByLabel("Markdown content")).not.toContainText(
+    imageMarkdown,
+  );
+  expect(
+    await page.evaluate((key) => localStorage.getItem(key), draftKey),
+  ).toBeNull();
+});
+
+test("remote, SVG, HTML and path-escape image references remain inert", async ({
+  page,
+}) => {
+  const editor = page.getByLabel("Markdown content");
+  await editor.fill(
+    "Active\n\n![remote](https://example.org/a.png)\n![svg](.attachments/test.svg)\n![escape](../outside.png)\n<img src='https://example.org/a.png'>",
+  );
+  await editor.press("ControlOrMeta+Home");
+  await expect(page.locator(".markdown-editor img")).toHaveCount(0);
+  expect(
+    await page.evaluate(() => sessionStorage.getItem("test:image-reads")),
+  ).toBeNull();
+});
+
+test("missing attachment exposes editable source without losing text", async ({
+  page,
+}) => {
+  await page.evaluate(() =>
+    sessionStorage.setItem("test:image-missing", "yes"),
+  );
+  const editor = page.getByLabel("Markdown content");
+  await editor.fill(`Active\n\n${imageMarkdown}`);
+  await editor.press("ControlOrMeta+Home");
+  await expect(
+    page.getByRole("button", { name: "Edit image Markdown" }),
+  ).toHaveText(imageMarkdown);
+  await page.getByRole("button", { name: "Edit image Markdown" }).click();
+  await expect(editor).toContainText(imageMarkdown);
+});
+
+test("file drops outside the editor cannot navigate the app", async ({
+  page,
+}) => {
+  expect(
+    await page.evaluate(() => {
+      const transfer = new DataTransfer();
+      transfer.items.add(
+        new File(["<html>untrusted</html>"], "page.html", {
+          type: "text/html",
+        }),
+      );
+      const event = new DragEvent("drop", {
+        dataTransfer: transfer,
+        bubbles: true,
+        cancelable: true,
+      });
+      document.body.dispatchEvent(event);
+      return event.defaultPrevented;
+    }),
+  ).toBe(true);
+  await expect(page.getByLabel("Markdown content")).toContainText("Original");
 });

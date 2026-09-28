@@ -94,3 +94,29 @@ pub async fn create_folder(
     })
     .await
 }
+
+#[tauri::command]
+pub async fn import_note_image(
+    app: AppHandle,
+    vault_path: String,
+    filename: String,
+    bytes: Vec<u8>,
+) -> Result<String, String> {
+    in_vault(app, vault_path, move |dir| {
+        notes::images::import(&dir, &filename, &bytes)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn read_note_image(
+    app: AppHandle,
+    vault_path: String,
+    filename: String,
+    reference: String,
+) -> Result<String, String> {
+    in_vault(app, vault_path, move |dir| {
+        notes::images::preview(&dir, &filename, &reference)
+    })
+    .await
+}

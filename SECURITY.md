@@ -24,3 +24,11 @@ Equation rendering uses KaTeX with `trust: false`, fresh macros per expression,
 preview limit. Errors are displayed through textContent, never raw exception HTML.
 KaTeX CSS/fonts are bundled locally; the existing content security policy remains
 unchanged. Source text is authoritative regardless of rendering success.
+
+Image import accepts only decoded PNG/JPEG/GIF/WebP bytes, limited to 8 MiB,
+4096 pixels per dimension and a 64 MiB decoder allocation budget. Import and preview
+share validation; preview re-encodes a bounded static PNG. Only managed UUID-named
+relative attachments are previewed, with NOFOLLOW directory/file opens and a regular
+file check. User-provided remote/data URLs and SVG/HTML never become image sources.
+The content security policy is unchanged. HTML5 file transfer is enabled by disabling
+Tauri's native drag interception; arbitrary filesystem reading is not exposed.
