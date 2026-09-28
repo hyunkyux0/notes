@@ -49,8 +49,8 @@ atomic saves/conflicts. UI tests use mocked desktop commands to check autosave,
 draft recovery, and failure handling; they do not replace native interaction tests.
 
 The independent [review scheduling core](docs/review-scheduling.md) also has Rust
-tests for calendar-day offsets and daylight-saving transitions. It is not yet
-connected to note saves or the Settings UI.
+tests for calendar-day offsets and daylight-saving transitions. Settings now configure review preferences; automatic note scheduling
+is not connected yet.
 
 ## Choose a vault
 
@@ -210,3 +210,21 @@ are overridden together; the review windows retain HTML5 image drop support.
 Check `git branch --show-current` and `git rev-parse --short HEAD` in the review
 checkout to confirm the revision. In the review app, check for the **New window**
 button and **File → New Window** before testing image drops or macOS Spaces.
+
+## Review settings
+
+Open the top-right Settings gear to set comma-separated day intervals, a local
+alert time, and an IANA timezone (for example `Asia/Hong_Kong`). Initial suggestions
+are 3, 7, 30 days, 09:00, and UTC; click **Save review settings** to persist them.
+These preferences apply to all vaults/windows of this app installation and are
+stored in `review-settings.json` beside `vault.json` in the app configuration folder.
+
+Open settings forms refresh every two seconds and on window focus. Unsaved changes
+are preserved when another window saves; **Reload saved settings** explicitly
+discards your settings edits and loads the latest values. Stale saves are rejected
+by the native backend. Invalid input or failed writes leave the saved file intact.
+Damaged settings files are reported and preserved for manual restoration; they are
+never silently replaced with defaults. Note content and recovery drafts are separate.
+
+This checkpoint configures preferences only. It does not create note schedules,
+connect Google Calendar, or send notifications.
