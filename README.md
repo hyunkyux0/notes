@@ -64,9 +64,10 @@ a `<!-- local-notes-id: UUID -->` first line, which preserves its identity when
 renamed or moved with its content intact. Filenames use a sanitized title plus UUID;
 repeated titles create separate files. Existing files are never replaced.
 
-The list includes regular `.md` files directly in the vault (UTF-8, up to 2 MiB),
+The list includes regular `.md` files in the vault and its visible subfolders (UTF-8, up to 2 MiB),
 plus files with recovery drafts, including deleted files. Use Refresh notes after
-external changes. Subfolders and rendered previews come later. Existing Markdown
+external changes. Symbolic links and hidden folders are skipped; folder depth is
+limited to 32 levels. Rendered previews come later. Existing Markdown
 without our ID comment keeps its format; editing does not insert an ID into it.
 If a new-file write fails partway through, its incomplete file may remain; the app
 reports this so you can inspect it before retrying.
@@ -90,12 +91,15 @@ these recovery files are not automatically deleted. Ordinary successful saves cl
 up their temporary file. Editors writing through an old, already-open file handle
 after replacement do not participate in this conflict protocol.
 
-To rename a saved note, enter its new filename (including `.md`) and select Rename
-note. Names stay in the same vault folder; path separators, hidden names, control
-characters, and certain special characters are rejected. Existing destinations
+To rename or move a saved note, enter its vault-relative path (including `.md`),
+such as `courses/week1/algebra.md`, and select Rename or move note. Destination
+folders must already exist; new notes are initially created at the vault root.
+Absolute paths, parent/dot components, hidden destination names, control characters,
+and certain special characters are rejected. Existing destinations
 are never replaced, including case-only collisions on case-insensitive filesystems.
 Save or discard recovery drafts for both names first. IDs, contents, and permissions
-stay unchanged. If the source changes externally, reload before retrying; a change
+stay unchanged. Moves are atomic on supported macOS/Linux filesystems; cross-filesystem
+moves fail without copying or deleting the source. If the source changes externally, reload before retrying; a change
 detected after the move reports the new location so you can refresh the list.
 
 ## Structure
