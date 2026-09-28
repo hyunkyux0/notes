@@ -199,3 +199,47 @@ footer {
     --error: #ffaaa0;
   }
 }
+
+.notes-panel {
+  margin-top: 28px;
+}
+.notes-panel form {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+.notes-panel input {
+  font: inherit;
+  color: inherit;
+  background: var(--sidebar);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 10px;
+  min-width: 0;
+}
+.note-list {
+  max-height: 240px;
+  overflow: auto;
+  padding-left: 20px;
+}
+.note-list button {
+  background: transparent;
+  border: 0;
+  text-align: left;
+  overflow-wrap: anywhere;
+  padding: 8px;
+}
+.note-list button[aria-pressed="true"] {
+  background: var(--selected);
+}
+.notes-panel h2 {
+  font-size: 16px;
+  overflow-wrap: anywhere;
+}
+.note-content {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  padding: 16px;
+  background: var(--sidebar);
+  line-height: 1.6;
+}

@@ -5,7 +5,7 @@ const sections = {
   Notebook: {
     title: "A quiet place to think.",
     description: "Keep your ideas in Markdown files on your computer.",
-    next: "Note creation and editing are coming next.",
+    next: "Create a note or read an existing Markdown file. Editing is coming next.",
   },
   Reviews: {
     title: "Make room to remember.",
@@ -55,7 +55,9 @@ export function App() {
           <p className="eyebrow">LOCAL NOTES</p>
           <h1 id="welcome-title">{content.title}</h1>
           <p className="description">{content.description}</p>
-          {section !== "Reviews" && <VaultPanel />}
+          {section !== "Reviews" && (
+            <VaultPanel showNotes={section === "Notebook"} />
+          )}
           <p className="milestone">{content.next}</p>
         </section>
         <footer>Stored locally. Made to revisit.</footer>

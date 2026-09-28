@@ -1,0 +1,130 @@
+//! Markdown stays authoritative. IDs travel with created files, including after renames.
+use cap_std::fs::{Dir, OpenOptions};
+use serde::Serialize;
+use std::io::{Read, Write};
+use uuid::Uuid;
+
+const MAX_BYTES: u64 = 2 * 1024 * 1024;
+const ID_PREFIX: &str = "<!-- local-notes-id: ";
+
+#[derive(Debug, Serialize)]
+pub struct Note {
+    pub filename: String,
+    pub id: Option<Uuid>,
+    pub content: String,
+}
+
+fn valid_filename(name: &str) -> bool {
+    !name.is_empty()
+        && !name.contains(['/', '\\', ':', '\0'])
+        && name.to_ascii_lowercase().ends_with(".md")
+}
+
+pub fn list(dir: &Dir) -> Result<Vec<String>, String> {
+    let mut names = Vec::new();
+    for entry in dir
+        .entries()
+        .map_err(|_| "The vault could not be listed.")?
+    {
+        let entry = entry.map_err(|_| "A vault entry could not be read.")?;
+        if !entry
+            .file_type()
+            .map_err(|_| "A file type could not be read.")?
+            .is_file()
+        {
+            continue;
+        }
+        if let Some(name) = entry
+            .file_name()
+            .to_str()
+            .filter(|name| valid_filename(name))
+        {
+            names.push(name.to_owned());
+        }
+    }
+    names.sort();
+    Ok(names)
+}
+
+pub fn read(dir: &Dir, filename: &str) -> Result<Note, String> {
+    if !valid_filename(filename) {
+        return Err("Choose a Markdown file directly inside the vault.".into());
+    }
+    if !dir
+        .symlink_metadata(filename)
+        .map_err(|_| "The note is unavailable.")?
+        .is_file()
+    {
+        return Err("The note must be a regular file, not a link or folder.".into());
+    }
+    // Dir confines path resolution to the vault even if a link changes during opening.
+    let file = dir
+        .open(filename)
+        .map_err(|_| "The note could not be opened inside the vault.")?;
+    if !file
+        .metadata()
+        .map_err(|_| "The note could not be inspected.")?
+        .is_file()
+    {
+        return Err("The note must be a regular file.".into());
+    }
+    let mut content = String::new();
+    file.take(MAX_BYTES + 1)
+        .read_to_string(&mut content)
+        .map_err(|_| "The note could not be read as UTF-8 Markdown.")?;
+    if content.len() as u64 > MAX_BYTES {
+        return Err("This preview supports notes up to 2 MiB.".into());
+    }
+    let id = content
+        .lines()
+        .next()
+        .and_then(|line| line.strip_prefix(ID_PREFIX))
+        .and_then(|value| value.strip_suffix(" -->"))
+        .and_then(|value| Uuid::parse_str(value).ok());
+    Ok(Note {
+        filename: filename.to_owned(),
+        id,
+        content,
+    })
+}
+
+pub fn create(dir: &Dir, title: &str) -> Result<Note, String> {
+    create_with_id(dir, title, Uuid::new_v4())
+}
+
+fn create_with_id(dir: &Dir, title: &str, id: Uuid) -> Result<Note, String> {
+    let title = title.trim();
+    if title.is_empty() || title.chars().count() > 120 || title.chars().any(char::is_control) {
+        return Err("Enter a title of 1–120 characters on one line.".into());
+    }
+    let slug: String = title
+        .chars()
+        .take(48)
+        .map(|c| {
+            if c.is_ascii_alphanumeric() {
+                c.to_ascii_lowercase()
+            } else {
+                '-'
+            }
+        })
+        .collect();
+    let slug = slug.trim_matches('-');
+    let filename = format!("{}-{id}.md", if slug.is_empty() { "note" } else { slug });
+    let content = format!("{ID_PREFIX}{id} -->\n\n# {title}\n");
+    // Exclusive creation never replaces an existing file, even on an ID collision.
+    let mut file = dir
+        .open_with(&filename, OpenOptions::new().write(true).create_new(true))
+        .map_err(|_| "The note could not be created; existing files were preserved.")?;
+    file.write_all(content.as_bytes())
+        .and_then(|_| file.sync_all())
+        .map_err(|_| "The new note could not be fully saved. Check the folder before retrying.")?;
+    Ok(Note {
+        filename,
+        id: Some(id),
+        content,
+    })
+}
+
+#[cfg(test)]
+#[path = "notes_tests.rs"]
+mod tests;
