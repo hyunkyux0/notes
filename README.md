@@ -93,7 +93,12 @@ after replacement do not participate in this conflict protocol.
 
 To rename or move a saved note, enter its vault-relative path (including `.md`),
 such as `courses/week1/algebra.md`, and select Rename or move note. Destination
-folders must already exist; new notes are initially created at the vault root.
+folders must already exist. Use **New folder name** to create folders inside the
+selected folder (one level at a time). Click a folder in the navigation tree to
+select and expand/collapse it, or **Vault root** to select the root. New notes are
+created in the selected folder. Empty folders remain visible; click a Markdown
+file to open it. Use **Refresh notes** after external filesystem changes. Folder
+rename, move, and deletion are not implemented yet.
 Absolute paths, parent/dot components, hidden destination names, control characters,
 and certain special characters are rejected. Existing destinations
 are never replaced, including case-only collisions on case-insensitive filesystems.

@@ -1,6 +1,6 @@
 use crate::{
     app_settings::settings_path,
-    notes::{self, Note},
+    notes::{self, Note, VaultListing},
     vault,
 };
 use cap_std::{ambient_authority, fs::Dir};
@@ -25,7 +25,10 @@ async fn in_vault<T: Send + 'static>(
 }
 
 #[tauri::command]
-pub async fn list_notes(app: AppHandle, vault_path: String) -> Result<Vec<String>, String> {
+pub async fn list_vault_contents(
+    app: AppHandle,
+    vault_path: String,
+) -> Result<VaultListing, String> {
     in_vault(app, vault_path, |dir| notes::list(&dir)).await
 }
 
@@ -43,8 +46,12 @@ pub async fn create_note(
     app: AppHandle,
     vault_path: String,
     title: String,
+    folder: String,
 ) -> Result<Note, String> {
-    in_vault(app, vault_path, move |dir| notes::create(&dir, &title)).await
+    in_vault(app, vault_path, move |dir| {
+        notes::create(&dir, &folder, &title)
+    })
+    .await
 }
 
 #[tauri::command]
@@ -71,6 +78,19 @@ pub async fn rename_note(
 ) -> Result<Note, String> {
     in_vault(app, vault_path, move |dir| {
         notes::rename(&dir, &filename, &new_filename, &expected_content)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn create_folder(
+    app: AppHandle,
+    vault_path: String,
+    parent: String,
+    name: String,
+) -> Result<String, String> {
+    in_vault(app, vault_path, move |dir| {
+        notes::create_folder(&dir, &parent, &name)
     })
     .await
 }
