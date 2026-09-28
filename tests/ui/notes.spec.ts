@@ -30,6 +30,8 @@ test.beforeEach(async ({ page }) => {
             sessionStorage.getItem("test:review-warning") ?? undefined,
         };
         switch (command) {
+          case "get_google_connection":
+            return { configured: false, connected: false, connecting: false };
           case "import_note_image":
             await new Promise((resolve) =>
               setTimeout(
