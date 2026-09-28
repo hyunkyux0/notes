@@ -32,3 +32,10 @@ relative attachments are previewed, with NOFOLLOW directory/file opens and a reg
 file check. User-provided remote/data URLs and SVG/HTML never become image sources.
 The content security policy is unchanged. HTML5 file transfer is enabled by disabling
 Tauri's native drag interception; arbitrary filesystem reading is not exposed.
+
+Window vault bindings and edit ownership live in native app state. Save, image
+import and rename commands verify the calling window's edit token; the token cannot
+authorize another window. Ownership stays locked during writes, including rename
+destination checks. Navigation releases ownership after pending saves finish;
+window reload/closure clears obsolete owners. Read-only windows never mount the
+draft-writing component. Shared drafts remain in local WebView storage for recovery.

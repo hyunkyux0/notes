@@ -28,6 +28,7 @@ type Props = {
   value: string;
   vaultPath: string;
   filename: string;
+  editToken: string;
   onImportBusy: (busy: boolean) => void;
   disabled: boolean;
   // Persistence must accept the text before it enters the editor's state/history.
@@ -40,6 +41,7 @@ export function MarkdownEditor({
   onEdit,
   vaultPath,
   filename,
+  editToken,
   onImportBusy,
 }: Props) {
   const [imageError, setImageError] = useState<string | null>(null);
@@ -54,6 +56,7 @@ export function MarkdownEditor({
     onEdit,
     vaultPath,
     filename,
+    editToken,
     onImportBusy,
   });
   const editing = useRef(new Compartment());
@@ -66,6 +69,7 @@ export function MarkdownEditor({
       onEdit,
       vaultPath,
       filename,
+      editToken,
       onImportBusy,
     };
   });

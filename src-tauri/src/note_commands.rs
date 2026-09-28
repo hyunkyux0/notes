@@ -1,23 +1,47 @@
 use crate::{
-    app_settings::settings_path,
     notes::{self, Note, VaultListing},
-    vault,
+    windows,
 };
 use cap_std::{ambient_authority, fs::Dir};
-use tauri::AppHandle;
+use tauri::{Manager, WebviewWindow};
+
+struct EditAccess {
+    filename: String,
+    token: String,
+    destination: Option<String>,
+}
 
 async fn in_vault<T: Send + 'static>(
-    app: AppHandle,
+    window: WebviewWindow,
     expected_path: String,
+    edit: Option<EditAccess>,
     action: impl FnOnce(Dir) -> Result<T, String> + Send + 'static,
 ) -> Result<T, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        let saved = vault::load(&settings_path(&app)?)?.ok_or("Choose a notes folder first.")?;
+        let saved = windows::selected_vault(&window)?.ok_or("Choose a notes folder first.")?;
         if saved.path != expected_path {
             return Err("The selected vault changed. Reopen the Notebook and try again.".into());
         }
         let dir = Dir::open_ambient_dir(saved.path, ambient_authority())
             .map_err(|_| "The notes folder could not be opened.")?;
+        let state = window.state::<windows::Workspaces>();
+        // Keep ownership valid for the entire write, including against window closure
+        // or a destination being acquired by another editor while a rename runs.
+        let guard = if edit.is_some() {
+            Some(state.lock().map_err(|_| "Window state is unavailable.")?)
+        } else {
+            None
+        };
+        if let (Some(edit), Some(workspaces)) = (&edit, &guard) {
+            windows::check_note_edit_access(
+                workspaces,
+                window.label(),
+                &expected_path,
+                &edit.filename,
+                &edit.token,
+                edit.destination.as_deref(),
+            )?;
+        }
         action(dir)
     })
     .await
@@ -26,29 +50,32 @@ async fn in_vault<T: Send + 'static>(
 
 #[tauri::command]
 pub async fn list_vault_contents(
-    app: AppHandle,
+    window: WebviewWindow,
     vault_path: String,
 ) -> Result<VaultListing, String> {
-    in_vault(app, vault_path, |dir| notes::list(&dir)).await
+    in_vault(window, vault_path, None, |dir| notes::list(&dir)).await
 }
 
 #[tauri::command]
 pub async fn read_note(
-    app: AppHandle,
+    window: WebviewWindow,
     vault_path: String,
     filename: String,
 ) -> Result<Note, String> {
-    in_vault(app, vault_path, move |dir| notes::read(&dir, &filename)).await
+    in_vault(window, vault_path, None, move |dir| {
+        notes::read(&dir, &filename)
+    })
+    .await
 }
 
 #[tauri::command]
 pub async fn create_note(
-    app: AppHandle,
+    window: WebviewWindow,
     vault_path: String,
     title: String,
     folder: String,
 ) -> Result<Note, String> {
-    in_vault(app, vault_path, move |dir| {
+    in_vault(window, vault_path, None, move |dir| {
         notes::create(&dir, &folder, &title)
     })
     .await
@@ -56,13 +83,19 @@ pub async fn create_note(
 
 #[tauri::command]
 pub async fn save_note(
-    app: AppHandle,
+    window: WebviewWindow,
     vault_path: String,
     filename: String,
+    edit_token: String,
     expected_content: String,
     body: String,
 ) -> Result<Note, String> {
-    in_vault(app, vault_path, move |dir| {
+    let edit = EditAccess {
+        filename: filename.clone(),
+        token: edit_token,
+        destination: None,
+    };
+    in_vault(window, vault_path, Some(edit), move |dir| {
         notes::save(&dir, &filename, &expected_content, &body)
     })
     .await
@@ -70,13 +103,19 @@ pub async fn save_note(
 
 #[tauri::command]
 pub async fn rename_note(
-    app: AppHandle,
+    window: WebviewWindow,
     vault_path: String,
     filename: String,
+    edit_token: String,
     new_filename: String,
     expected_content: String,
 ) -> Result<Note, String> {
-    in_vault(app, vault_path, move |dir| {
+    let edit = EditAccess {
+        filename: filename.clone(),
+        token: edit_token,
+        destination: Some(new_filename.clone()),
+    };
+    in_vault(window, vault_path, Some(edit), move |dir| {
         notes::rename(&dir, &filename, &new_filename, &expected_content)
     })
     .await
@@ -84,12 +123,12 @@ pub async fn rename_note(
 
 #[tauri::command]
 pub async fn create_folder(
-    app: AppHandle,
+    window: WebviewWindow,
     vault_path: String,
     parent: String,
     name: String,
 ) -> Result<String, String> {
-    in_vault(app, vault_path, move |dir| {
+    in_vault(window, vault_path, None, move |dir| {
         notes::create_folder(&dir, &parent, &name)
     })
     .await
@@ -97,12 +136,18 @@ pub async fn create_folder(
 
 #[tauri::command]
 pub async fn import_note_image(
-    app: AppHandle,
+    window: WebviewWindow,
     vault_path: String,
     filename: String,
+    edit_token: String,
     bytes: Vec<u8>,
 ) -> Result<String, String> {
-    in_vault(app, vault_path, move |dir| {
+    let edit = EditAccess {
+        filename: filename.clone(),
+        token: edit_token,
+        destination: None,
+    };
+    in_vault(window, vault_path, Some(edit), move |dir| {
         notes::images::import(&dir, &filename, &bytes)
     })
     .await
@@ -110,12 +155,12 @@ pub async fn import_note_image(
 
 #[tauri::command]
 pub async fn read_note_image(
-    app: AppHandle,
+    window: WebviewWindow,
     vault_path: String,
     filename: String,
     reference: String,
 ) -> Result<String, String> {
-    in_vault(app, vault_path, move |dir| {
+    in_vault(window, vault_path, None, move |dir| {
         notes::images::preview(&dir, &filename, &reference)
     })
     .await

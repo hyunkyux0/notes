@@ -171,3 +171,18 @@ within the same folder preserves images. Moving a note containing `.attachments/
 to another folder is blocked until safe reference updates are implemented. This
 conservative check also covers references in code examples. External moves are not
 rewritten automatically. Missing images remain editable Markdown.
+
+### Multiple windows
+
+Use **File → New Window** (**Cmd+N** on macOS) or the **New window** button.
+Each window has its own vault selection, navigation and editor; new windows start
+with the last selected vault. Move windows between macOS desktops using Mission
+Control. Closing one window leaves the others open.
+
+A note is editable in one window at a time. Other windows show its saved Markdown
+in read-only live preview, refreshing every two seconds and when focused. Different
+notes or vaults can be edited simultaneously. Close or navigate away from the owning
+editor, then click **Edit here** in another window to continue; retained drafts
+remain available. Reopening the app restores the last vault, not the previous window
+layout. The folder list refreshes on focus. Existing external-file conflict checks
+still apply. Case/Unicode aliases are conservatively treated as the same note.

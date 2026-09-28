@@ -68,7 +68,7 @@ export class ImageWidget extends WidgetType {
 
 export async function importImage(
   file: File,
-  context: { vaultPath: string; filename: string },
+  context: { vaultPath: string; filename: string; editToken: string },
 ) {
   if (file.size > 8 * 1024 * 1024)
     throw new Error("Images must be at most 8 MiB.");
@@ -76,6 +76,7 @@ export async function importImage(
   return invoke<string>("import_note_image", {
     vaultPath: context.vaultPath,
     filename: context.filename,
+    editToken: context.editToken,
     bytes: Array.from(new Uint8Array(await file.arrayBuffer())),
   });
 }

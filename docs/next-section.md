@@ -1,4 +1,4 @@
-After this image-attachments PR is merged, implement the first review-scheduler
+After this multiple-windows PR is merged, implement the first review-scheduler
 checkpoint from section 4: a small, independently tested scheduling core that
 calculates reviews after 3, 7, and 30 calendar days using configurable intervals,
 local alert time, and an explicit timezone. Specify and test daylight-saving gap

@@ -40,6 +40,13 @@ test.beforeEach(async ({ page }) => {
             if (sessionStorage.getItem("test:image-missing"))
               throw "Image missing";
             return "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==";
+          case "acquire_note":
+            return !sessionStorage.getItem("test:note-owned");
+          case "release_note":
+            return null;
+          case "new_window":
+            sessionStorage.setItem("test:new-window", "yes");
+            return null;
           case "get_vault":
             return sessionStorage.getItem("test:no-vault")
               ? null

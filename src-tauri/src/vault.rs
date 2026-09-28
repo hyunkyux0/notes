@@ -2,12 +2,12 @@
 use serde::{Deserialize, Serialize};
 use std::{fs, io::Write, path::Path};
 
-#[derive(Debug, Deserialize, Serialize, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 pub struct Vault {
     pub path: String,
 }
 
-fn validate(path: &Path) -> Result<Vault, String> {
+pub(crate) fn validate(path: &Path) -> Result<Vault, String> {
     if !path.is_absolute() {
         return Err("Choose an absolute folder location.".into());
     }
