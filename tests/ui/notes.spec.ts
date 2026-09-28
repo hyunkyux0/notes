@@ -650,3 +650,96 @@ test("editor styles use the provided nonce under a restrictive style policy", as
     ),
   ).toBe(true);
 });
+
+test("live preview formats inactive Markdown and reveals the line being edited", async ({
+  page,
+}) => {
+  const source =
+    'Intro\n\n# Heading\n\n**bold** and *italic* and `code`\n\n- item\n\n[label](javascript:alert(1) "title")\n\n```js\nconst x = 1\n```\n\n<img src=x onerror=alert(1)>\n\nend';
+  await page.evaluate(
+    (source) => localStorage.setItem("test:disk", source),
+    source,
+  );
+  await page.reload();
+  await page.getByRole("button", { name: "study.md", exact: true }).click();
+  const editor = page.getByLabel("Markdown content");
+  await expect(
+    page.getByRole("button", { name: "Source mode" }),
+  ).toHaveAttribute("aria-pressed", "false");
+  await expect(editor.locator(".preview-h1")).toHaveText("Heading");
+  await expect(editor).toContainText("bold and italic and code");
+  await expect(editor).toContainText("• item");
+  await expect(editor).not.toContainText("javascript:");
+  await expect(editor).not.toContainText("```");
+  await expect(
+    editor.locator(".preview-code-block").filter({ hasText: "const" }),
+  ).toBeVisible();
+  await expect(
+    editor.locator("img:not(.cm-widgetBuffer), a[href], script"),
+  ).toHaveCount(0);
+  await editor.getByText("bold", { exact: true }).click();
+  await expect(editor).toContainText("**bold** and *italic* and `code`");
+  await expect(page.getByRole("status")).toHaveText("Saved");
+  expect(await page.evaluate((key) => localStorage.getItem(key), diskKey)).toBe(
+    source,
+  );
+  expect(
+    await page.evaluate((key) => localStorage.getItem(key), draftKey),
+  ).toBeNull();
+});
+
+test("mode switches preserve selection, undo history, and unsaved drafts", async ({
+  page,
+}) => {
+  const editor = page.getByLabel("Markdown content");
+  await editor.fill("# Title\n\n**bold**\n\nend");
+  await expect(page.getByRole("status")).toHaveText("Saved");
+  await page.evaluate(() => sessionStorage.setItem("test:fail", "yes"));
+  await editor.press("ControlOrMeta+End");
+  await page.keyboard.type("!");
+  await expect(page.getByRole("alert")).toContainText("Save failed");
+  const draft = await page.evaluate(
+    (key) => localStorage.getItem(key),
+    draftKey,
+  );
+  const toggle = page.getByRole("button", { name: "Source mode" });
+  await toggle.click();
+  await expect(editor).toContainText("**bold**");
+  expect(
+    await page.evaluate((key) => localStorage.getItem(key), draftKey),
+  ).toBe(draft);
+  await toggle.click();
+  await expect(editor).not.toContainText("**bold**");
+  await editor.focus();
+  await page.keyboard.type("?");
+  await page.evaluate(() => sessionStorage.removeItem("test:fail"));
+  await page.getByRole("button", { name: "Retry save" }).click();
+  await expect
+    .poll(() => page.evaluate((key) => localStorage.getItem(key), diskKey))
+    .toBe("# Title\n\n**bold**\n\nend!?");
+  await editor.press("ControlOrMeta+z");
+  await expect(editor).not.toContainText("?");
+  await editor.press("ControlOrMeta+Shift+z");
+  await expect(editor).toContainText("end!?");
+});
+
+test("reference links, multiline syntax, and images retain their Markdown source", async ({
+  page,
+}) => {
+  const source =
+    "Intro\n\n[one][ref] and [short]\n\n[ref]: https://example.com\n\n![alt](image.png)\n\n**multiple\nlines**\n\nend";
+  await page.evaluate(
+    (source) => localStorage.setItem("test:disk", source),
+    source,
+  );
+  await page.reload();
+  await page.getByRole("button", { name: "study.md", exact: true }).click();
+  const editor = page.getByLabel("Markdown content");
+  await expect(editor).toContainText("one and short");
+  await expect(editor).toContainText("![alt](image.png)");
+  await page.getByRole("button", { name: "Source mode" }).click();
+  await expect(editor).toContainText("[one][ref] and [short]");
+  expect(await page.evaluate((key) => localStorage.getItem(key), diskKey)).toBe(
+    source,
+  );
+});
